@@ -18,9 +18,12 @@ void inputAndCallCommand()
     {
         char *command = (char *)calloc(10, sizeof(char));
         scanf("%s", command);
+        getchar();
 
         if (strcmp(command, "newfile") == 0)
         {
+            char *attribute = (char *)calloc(10, sizeof(char));
+            scanf("%s ", attribute);
             if (newFile(inputPath()) == 1)
             {
                 printf("This file already exists\n");
@@ -33,51 +36,58 @@ void inputAndCallCommand()
             char *file = (char *)calloc(100, sizeof(char));
             char *data = (char *)calloc(1000, sizeof(char));
 
-            // -file attribute
-            file = inputPath();
-
-            // -str attribute
-            scanf("%s ", attribute);
-            char c = getchar();
-            char end = (c == '"') ? '"' : ' ';
-            for (int i = 0;; i++)
+            for (int i = 0; i < 3; i++)
             {
-                if (i != 0 || end == '"')
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "-file") == 0)
                 {
-                    c = getchar();
+                    file = inputPath();
                 }
-                if (c == '\\')
+                else if (strcmp(attribute, "-str") == 0)
                 {
-                    c = getchar();
-                    switch (c)
+                    char c = getchar();
+                    char end = (c == '"') ? '"' : ' ';
+                    for (int i = 0;; i++)
                     {
-                    case 'n':
-                        c = '\n';
-                        break;
-                    case '\\':
-                        c = '\\';
-                        break;
-                    case '"':
-                        c = '\"';
-                        break;
+                        if (i != 0 || end == '"')
+                        {
+                            c = getchar();
+                        }
+                        if (c == '\\')
+                        {
+                            c = getchar();
+                            switch (c)
+                            {
+                            case 'n':
+                                c = '\n';
+                                break;
+                            case '\\':
+                                c = '\\';
+                                break;
+                            case '"':
+                                c = '\"';
+                                break;
+                            }
+                        }
+                        else if (c == end || c == '\n')
+                        {
+                            *(data + i) = '\0';
+                            break;
+                        }
+
+                        *(data + i) = c;
+                    }
+                    if (end == '"')
+                    {
+                        getchar();
                     }
                 }
-                else if (c == end)
+                else if (strcmp(attribute, "-pos") == 0)
                 {
-                    *(data + i) = '\0';
-                    break;
+                    scanf("%d:%d", &line, &pos);
+                    getchar();
                 }
-
-                *(data + i) = c;
             }
-            if (end == '"')
-            {
-                getchar();
-            }
-
-            // -pos attribute
-            scanf("%s %d:%d", attribute, &line, &pos);
-            getchar();
 
             int result = insert(file, data, line, pos);
             if (result == 1)
@@ -91,6 +101,10 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "cat") == 0)
         {
+
+            char *attribute = (char *)calloc(10, sizeof(char));
+            scanf("%s ", attribute);
+
             int result = cat(inputPath());
             if (result == 1)
             {
@@ -107,19 +121,33 @@ void inputAndCallCommand()
             char *attribute = (char *)calloc(10, sizeof(char));
             int line, pos, length;
             char direction;
-            file = inputPath();
 
-            // -pos attribute
-            scanf("%s %d:%d", attribute, &line, &pos);
-            getchar();
-
-            // -size attribute
-            scanf("%s %d", attribute, &length);
-            getchar();
-
-            // direction flag
-            scanf("-%c", &direction);
-            getchar();
+            for (int i = 0; i < 4; i++)
+            {
+                scanf("%s", attribute);
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    getchar();
+                    file = inputPath();
+                }
+                else if (strcmp(attribute, "-pos") == 0)
+                {
+                    getchar();
+                    scanf("%d:%d", &line, &pos);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-size") == 0)
+                {
+                    getchar();
+                    scanf("%d", &length);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-f") == 0 || strcmp(attribute, "-b") == 0)
+                {
+                    direction = attribute[1];
+                    getchar();
+                }
+            }
 
             int result = removeString(file, line, pos, length, direction);
             if (result == 1)
@@ -137,19 +165,33 @@ void inputAndCallCommand()
             char *attribute = (char *)calloc(10, sizeof(char));
             int line, pos, length;
             char direction;
-            file = inputPath();
 
-            // -pos attribute
-            scanf("%s %d:%d", attribute, &line, &pos);
-            getchar();
-
-            // -size attribute
-            scanf("%s %d", attribute, &length);
-            getchar();
-
-            // direction flag
-            scanf("-%c", &direction);
-            getchar();
+            for (int i = 0; i < 4; i++)
+            {
+                scanf("%s", attribute);
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    getchar();
+                    file = inputPath();
+                }
+                else if (strcmp(attribute, "-pos") == 0)
+                {
+                    getchar();
+                    scanf("%d:%d", &line, &pos);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-size") == 0)
+                {
+                    getchar();
+                    scanf("%d", &length);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-f") == 0 || strcmp(attribute, "-b") == 0)
+                {
+                    direction = attribute[1];
+                    getchar();
+                }
+            }
 
             int result = copy(file, line, pos, length, direction);
             if (result == 1)
@@ -167,19 +209,33 @@ void inputAndCallCommand()
             char *attribute = (char *)calloc(10, sizeof(char));
             int line, pos, length;
             char direction;
-            file = inputPath();
 
-            // -pos attribute
-            scanf("%s %d:%d", attribute, &line, &pos);
-            getchar();
-
-            // -size attribute
-            scanf("%s %d", attribute, &length);
-            getchar();
-
-            // direction flag
-            scanf("-%c", &direction);
-            getchar();
+            for (int i = 0; i < 4; i++)
+            {
+                scanf("%s", attribute);
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    getchar();
+                    file = inputPath();
+                }
+                else if (strcmp(attribute, "-pos") == 0)
+                {
+                    getchar();
+                    scanf("%d:%d", &line, &pos);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-size") == 0)
+                {
+                    getchar();
+                    scanf("%d", &length);
+                    getchar();
+                }
+                else if (strcmp(attribute, "-f") == 0 || strcmp(attribute, "-b") == 0)
+                {
+                    direction = attribute[1];
+                    getchar();
+                }
+            }
 
             int result = cut(file, line, pos, length, direction);
             if (result == 1)
@@ -196,11 +252,21 @@ void inputAndCallCommand()
             char *file = (char *)calloc(100, sizeof(char));
             char *attribute = (char *)calloc(10, sizeof(char));
             int line, pos;
-            file = inputPath();
 
-            // -pos attribute
-            scanf("%s %d:%d", attribute, &line, &pos);
-
+            for (int i = 0; i < 2; i++)
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    file = inputPath();
+                }
+                else if (strcmp(attribute, "-pos") == 0)
+                {
+                    scanf("%d:%d", &line, &pos);
+                    getchar();
+                }
+            }
+            
             int result = paste(file, line, pos);
             if (result == 1)
             {
@@ -233,8 +299,6 @@ void inputAndCallCommand()
 char *inputPath()
 {
     char *file = (char *)calloc(100, sizeof(char));
-    char *attribute = (char *)calloc(10, sizeof(char));
-    scanf("%s ", attribute);
     char c = getchar();
     char end = (c == '"') ? '"' : ' ';
     if (end == '"')
@@ -251,6 +315,11 @@ char *inputPath()
         }
         *(file + i) = c;
     }
+    if (end == '"')
+    {
+        getchar();
+    }
+
     return file;
 }
 
