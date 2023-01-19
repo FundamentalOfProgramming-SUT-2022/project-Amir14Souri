@@ -1,9 +1,10 @@
-typedef struct character Char;
 void inputAndCallCommand();
+char *inputPath();
 int newFile(char *address);
+int checkPath(char *address);
 int insert(char *address, char *string, int line, int pos);
-Char *startString(char c);
-Char *addChar(Char *node, char c);
-Char *removeChar(Char *first, Char *node);
-Char *endString(Char *node);
-void structToString(Char *first, char *string);
+int cat(char *address);
+int removeString(char *address, int line, int pos, int length, char direction);
+int copy(char *address, int line, int pos, int length, char direction);
+int cut(char *address, int line, int pos, int length, char direction);
+int paste(char *address, int line, int pos);
