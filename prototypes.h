@@ -8,3 +8,6 @@ int removeString(char *address, int line, int pos, int length, char direction);
 int copy(char *address, int line, int pos, int length, char direction);
 int cut(char *address, int line, int pos, int length, char direction);
 int paste(char *address, int line, int pos);
+int find(char *address, char *key, int options, int at);
+void printFind(int startA[][2], int i, int by);
+int replace(char *address, char *key, char *alternate, int options, int at);
