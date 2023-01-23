@@ -7,7 +7,8 @@
 
 int main()
 {
-    inputAndCallCommand();
+    // inputAndCallCommand();
+    printf("%d", autoIndent("root/test"));
 
     return 0;
 }
@@ -18,7 +19,8 @@ void inputAndCallCommand()
     {
         char *command = (char *)calloc(10, sizeof(char));
         scanf("%s", command);
-        getchar();
+        char trash = 'a';
+        trash = getchar();
 
         if (strcmp(command, "newfile") == 0)
         {
@@ -560,12 +562,148 @@ void inputAndCallCommand()
                 printf("Success\n");
             }
         }
+        else if (strcmp(command, "grep") == 0)
+        {
+            char *files[50];
+            char *key = (char *)calloc(100, sizeof(char));
+            char *attribute = (char *)calloc(10, sizeof(char));
+            int options = 0, n = 0;
+
+            // -file, -str and options
+            for (int i = 0; i < 3; i++)
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "-c") == 0)
+                {
+                    options = 1;
+                }
+                else if (strcmp(attribute, "-l") == 0)
+                {
+                    options = 2;
+                }
+                else if (strcmp(attribute, "-str") == 0)
+                {
+                    if (i == 0)
+                    {
+                        i++;
+                    }
+                    char c = getchar();
+                    char end = (c == '"') ? '"' : ' ';
+                    for (int i = 0;; i++)
+                    {
+                        if (i != 0 || end == '"')
+                        {
+                            c = getchar();
+                        }
+                        if (c == '\\')
+                        {
+                            c = getchar();
+                            switch (c)
+                            {
+                            case '\\':
+                                c = '\\';
+                                break;
+                            case '"':
+                                c = '\"';
+                                break;
+                            }
+                        }
+                        else if (c == end || c == '\n')
+                        {
+                            *(key + i) = '\0';
+                            break;
+                        }
+
+                        *(key + i) = c;
+                    }
+                    if (end == '"')
+                    {
+                        getchar();
+                    }
+                }
+                else if (strcmp(attribute, "-files") == 0)
+                {
+                    char c = ' ';
+                    for (int j = 0; c != '\n'; j++)
+                    {
+                        files[n] = (char *)calloc(100, sizeof(char));
+                        c = getchar();
+                        char end = (c == '"') ? '"' : ' ';
+                        if (end == '"')
+                        {
+                            getchar();
+                        }
+                        for (int k = 0;; k++)
+                        {
+                            c = getchar();
+                            if (c == end || c == '\n')
+                            {
+                                *(files[n] + k) = '\0';
+                                n++;
+                                break;
+                            }
+                            *(files[n] + k) = c;
+                        }
+                        if (end == '"')
+                        {
+                            getchar();
+                        }
+                    }
+                }
+            }
+
+            // result
+            int result = grep(files, n, key, options);
+            if (result == 1)
+            {
+                printf("Some invalid path\n");
+            }
+            else if (result == 2)
+            {
+                printf("Some files doesn't exist\n");
+            }
+            else if (result == 3)
+            {
+                printf("Not found!\n");
+            }
+        }
+        else if (strcmp(command, "undo") == 0)
+        {
+            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(100, sizeof(char));
+
+            scanf("%s ", attribute);
+            int result = undo(inputPath());
+            if (result == 1)
+            {
+                printf("Invalid path\n");
+            }
+            else if (result == 2)
+            {
+                printf("File doesn't exist\n");
+            }
+            else if (result == 3)
+            {
+                printf("No changes has been made to this file!\n");
+            }
+            else
+            {
+                printf("Success\n");
+            }
+        }
         else if (strcmp(command, "exit") == 0)
         {
+            FILE *clipboard = fopen("root/.clipboard.txt", "w");
+            fclose(clipboard);
             break;
         }
         else
         {
+            if (trash == '\n')
+            {
+                printf("Invalid command\n");
+                continue;
+            }
             while (1)
             {
                 if (getchar() == '\n')
@@ -604,6 +742,64 @@ char *inputPath()
     }
 
     return file;
+}
+
+char *fileName(char *address)
+{
+    char *name = (char *)calloc(50, sizeof(char));
+    int last = -1;
+    for (int i = 0;; i++)
+    {
+        if (*(address + i) == '/')
+        {
+            last = i;
+        }
+        else if (*(address + i) == '\0')
+        {
+            break;
+        }
+    }
+    for (int i = 0;; i++)
+    {
+        if (*(address + last + i + 1) == '\0')
+        {
+            *(name + i) = '\0';
+            break;
+        }
+
+        *(name + i) = *(address + last + i + 1);
+    }
+
+    return name;
+}
+
+char *filePath(char *address)
+{
+    char *path = (char *)calloc(100, sizeof(char));
+    int last = -1;
+    for (int i = 0;; i++)
+    {
+        if (*(address + i) == '/')
+        {
+            last = i;
+        }
+        else if (*(address + i) == '\0')
+        {
+            break;
+        }
+    }
+    for (int i = 0;; i++)
+    {
+        if (i == last)
+        {
+            *(path + i) = '/';
+            break;
+        }
+
+        *(path + i) = *(address + i);
+    }
+
+    return path;
 }
 
 int newFile(char *address)
@@ -744,6 +940,8 @@ int insert(char *address, char *string, int line, int pos)
         }
     }
     fclose(file);
+
+    backupFile(address);
     FILE *new = fopen(address, "w");
     fprintf(file, "%s", content);
     fclose(new);
@@ -838,6 +1036,7 @@ int removeString(char *address, int line, int pos, int length, char direction)
 
         *(newContent + i) = *(content + i + indent);
     }
+    backupFile(address);
     FILE *new = fopen(address, "w");
     fprintf(new, "%s", newContent);
     fclose(new);
@@ -1395,8 +1594,274 @@ int replace(char *address, char *key, char *alternate, int options, int at)
         break;
     }
 
+    backupFile(address);
     FILE *new = fopen(address, "w");
     fprintf(new, "%s", newContent);
     fclose(new);
     return 0;
+}
+
+int grep(char *addresses[], int n, char *key, int options)
+{
+    int matches[200][2], count = 0;
+    for (int i = 0; i < 200; i++)
+    {
+        matches[i][0] = -1;
+        matches[i][1] = -1;
+    }
+    char *content = (char *)calloc(1000, sizeof(char));
+    for (int i = 0; i < n; i++)
+    {
+        if (checkPath(addresses[i]) == 1)
+        {
+            return 1;
+        }
+        FILE *file = fopen(addresses[i], "r");
+        if (file == NULL)
+        {
+            return 2;
+        }
+
+        int k = 0, line = 0, found = 0;
+        for (int j = 0;; j++)
+        {
+            char c = fgetc(file);
+            if (c == EOF)
+            {
+                *(content + j) = '\0';
+                break;
+            }
+
+            if (key[k] == '\0')
+            {
+                matches[count][0] = i;
+                matches[count][1] = line;
+                found = 1;
+                k = 0;
+                count++;
+            }
+            if (c == '\n')
+            {
+                found = 0;
+                line++;
+            }
+
+            if (c == key[k] && found == 0)
+            {
+                k++;
+            }
+            else
+            {
+                k = 0;
+            }
+
+            *(content + j) = c;
+        }
+
+        if (options == 0)
+        {
+            k = 0;
+            line = 0;
+            for (int j = 0;; j++)
+            {
+                if (matches[j][0] == -1)
+                {
+                    break;
+                }
+                if (matches[j][0] != i)
+                {
+                    continue;
+                }
+
+                while (1)
+                {
+                    char c = *(content + k);
+                    if (line == matches[j][1])
+                    {
+                        putc(c, stdout);
+                        if (c == '\n')
+                        {
+                            k++;
+                            line++;
+                            break;
+                        }
+                    }
+
+                    if (c == '\n')
+                    {
+                        line++;
+                    }
+                    k++;
+                }
+            }
+        }
+
+        fclose(file);
+    }
+
+    switch (options)
+    {
+    case 0:
+        if (count == 0)
+        {
+            return 3;
+        }
+        return 0;
+        break;
+    case 1:
+        printf("%d\n", count);
+        return 0;
+        break;
+    case 2:
+        if (count == 0)
+        {
+            return 3;
+        }
+        int last = -1;
+        for (int i = 0; matches[i][0] != -1; i++)
+        {
+            if (matches[i][0] != last)
+            {
+                printf("/%s\n", addresses[++last]);
+            }
+        }
+        return 0;
+        break;
+    }
+}
+
+void backupFile(char *address)
+{
+    char *content = (char *)calloc(1000, sizeof(char));
+    FILE *file = fopen(address, "r");
+    for (int i = 0;; i++)
+    {
+        char c = fgetc(file);
+        if (c == EOF)
+        {
+            *(content + i) = '\0';
+            break;
+        }
+        *(content + i) = c;
+    }
+    fclose(file);
+
+    char *backupAddress = filePath(address);
+    strcat(backupAddress, ".");
+    strcat(backupAddress, fileName(address));
+    FILE *backup = fopen(backupAddress, "w");
+    fprintf(backup, "%s", content);
+    fclose(backup);
+}
+
+int undo(char *address)
+{
+    if (checkPath(address) == 1)
+    {
+        return 1;
+    }
+    FILE *file = fopen(address, "r");
+    if (file == NULL)
+    {
+        return 2;
+    }
+    fclose(file);
+
+    char *backupAddress = filePath(address);
+    strcat(backupAddress, ".");
+    strcat(backupAddress, fileName(address));
+    FILE *backup = fopen(backupAddress, "r");
+    if (backup == NULL)
+    {
+        return 3;
+    }
+
+    char *backupContent = (char *)calloc(1000, sizeof(char));
+    for (int i = 0;; i++)
+    {
+        char c = fgetc(backup);
+        if (c == EOF)
+        {
+            *(backupContent + i) = '\0';
+            break;
+        }
+        *(backupContent + i) = c;
+    }
+    fclose(backup);
+
+    backupFile(address);
+    FILE *new = fopen(address, "w");
+    fprintf(new, "%s", backupContent);
+    fclose(new);
+    return 0;
+}
+
+int autoIndent(char *address)
+{
+    if (checkPath(address) == 1)
+    {
+        return 1;
+    }
+    FILE *file = fopen(address, "r");
+    if (file == NULL)
+    {
+        return 2;
+    }
+
+    char *content = (char *)calloc(1000, sizeof(char));
+    int space = 0, tab = 0, ok = 0, bracket = 0;
+    for (int i = 0;; i++)
+    {
+        char c = fgetc(file);
+        if (c == '{')
+        {
+            ok++;
+            i -= space;
+        }
+        else if (c == '}')
+        {
+            ok--;
+            i -= space;
+        }
+        if (ok < 0)
+        {
+            return 3;
+        }
+
+        if (c == EOF)
+        {
+            break;
+        }
+        else if (c == ' ' || c == '\n')
+        {
+            space++;
+        }
+        else
+        {
+            space = 0;
+        }
+
+        if (bracket == 1)
+        {
+            if (c == ' ' || c == '\n')
+            {
+                i--;
+            }
+            else
+            {
+                bracket = 0;
+            }
+        }
+        else
+        {
+            *(content + i) = c;
+        }
+
+        if (c == '{' || c == '}')
+        {
+            bracket = 1;
+        }
+    }
+
+    printf("%s\n", content);
 }

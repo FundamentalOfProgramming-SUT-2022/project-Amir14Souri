@@ -1,5 +1,7 @@
 void inputAndCallCommand();
 char *inputPath();
+char *fileName(char *address);
+char *filePath(char *address);
 int newFile(char *address);
 int checkPath(char *address);
 int insert(char *address, char *string, int line, int pos);
@@ -11,3 +13,7 @@ int paste(char *address, int line, int pos);
 int find(char *address, char *key, int options, int at);
 void printFind(int startA[][2], int i, int by);
 int replace(char *address, char *key, char *alternate, int options, int at);
+int grep(char *addresses[], int n, char *key, int options);
+void backupFile(char *address);
+int undo(char *address);
+int autoIndent(char *address);
