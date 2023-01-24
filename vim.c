@@ -7,8 +7,7 @@
 
 int main()
 {
-    // inputAndCallCommand();
-    printf("%d", autoIndent("root/test"));
+    inputAndCallCommand();
 
     return 0;
 }
@@ -685,6 +684,30 @@ void inputAndCallCommand()
             else if (result == 3)
             {
                 printf("No changes has been made to this file!\n");
+            }
+            else
+            {
+                printf("Success\n");
+            }
+        }
+        else if (strcmp(command, "auto-indent") == 0)
+        {
+            char *attribute = (char *)calloc(10, sizeof(char));
+            scanf("%s ", attribute);
+
+            // result
+            int result = autoIndent(inputPath());
+            if (result == 1)
+            {
+                printf("Invalid path\n");
+            }
+            else if (result == 2)
+            {
+                printf("File doesn't exist\n");
+            }
+            else if (result == 3)
+            {
+                printf("Incorrect set of curly brackets!\n");
             }
             else
             {
@@ -1808,28 +1831,43 @@ int autoIndent(char *address)
         return 2;
     }
 
+    char *newContent = (char *)calloc(1000, sizeof(char));
     char *content = (char *)calloc(1000, sizeof(char));
-    int space = 0, tab = 0, ok = 0, bracket = 0;
+    int space = 0, ok = 0, bracket = 0;
     for (int i = 0;; i++)
     {
-        char c = fgetc(file);
-        if (c == '{')
+        char c;
+        c = fgetc(file);
+
+        if (c == '{' || c == '}')
         {
-            ok++;
+            if (bracket == 1)
+            {
+                space = 0;
+            }
+            if (c == '{')
+            {
+                ok++;
+            }
+            else
+            {
+                ok--;
+            }
+            if (ok < 0)
+            {
+                return 3;
+            }
+
+            bracket = 1;
             i -= space;
-        }
-        else if (c == '}')
-        {
-            ok--;
-            i -= space;
-        }
-        if (ok < 0)
-        {
-            return 3;
+            *(content + i) = c;
+            space = 0;
+            continue;
         }
 
         if (c == EOF)
         {
+            *(content + i) = '\0';
             break;
         }
         else if (c == ' ' || c == '\n')
@@ -1852,16 +1890,108 @@ int autoIndent(char *address)
                 bracket = 0;
             }
         }
-        else
+        if (bracket == 0)
         {
             *(content + i) = c;
         }
+    }
+    fclose(file);
 
-        if (c == '{' || c == '}')
+    if (ok != 0)
+    {
+        return 3;
+    }
+
+    int indent = 0, tab = 0, future = 1, imediate = 0;
+    bracket = 0;
+    for (int i = 0;; i++)
+    {
+        char c = *(content + i);
+        if (c == '{')
         {
+            if (i != 0 && bracket == 0)
+            {
+                *(newContent + indent + i) = ' ';
+                indent++;
+            }
+            *(newContent + indent + i) = c;
+            indent++;
+            tab++;
+            *(newContent + indent + i) = '\n';
             bracket = 1;
+            imediate = 0;
+            c = '\n';
+        }
+        else if (c == '}')
+        {
+            if (imediate == 0)
+            {
+                *(newContent + indent + i) = '\n';
+                indent++;
+            }
+            else
+            {
+                indent -= 4 * tab;
+            }
+            tab--;
+            for (int j = 0; j < 4 * tab; j++)
+            {
+                *(newContent + indent + i) = ' ';
+                indent++;
+            }
+            *(newContent + indent + i) = c;
+            indent++;
+            *(newContent + indent + i) = '\n';
+            bracket = 1;
+            imediate = 1;
+            c = '\n';
+        }
+        else if (c == '\0')
+        {
+            imediate = 0;
+            *(newContent + indent + i) = c;
+            break;
+        }
+        else
+        {
+            imediate = 0;
+            bracket = 0;
+        }
+
+        if (bracket == 0)
+        {
+            *(newContent + indent + i) = c;
+        }
+
+        if (c == '\n')
+        {
+            if (*(content + i + future) == '\n')
+            {
+                continue;
+            }
+            else if (*(content + i + future) == ' ')
+            {
+                future++;
+                i--;
+                continue;
+            }
+
+            indent++;
+            for (int j = 0; j < 4 * tab; j++)
+            {
+                *(newContent + indent + i) = ' ';
+                indent++;
+            }
+            indent--;
+            i += future - 1;
+            indent -= future - 1;
+            future = 1;
         }
     }
 
-    printf("%s\n", content);
+    backupFile(address);
+    FILE *new = fopen(address, "w");
+    fprintf(new, "%s", newContent);
+    fclose(new);
+    return 0;
 }
