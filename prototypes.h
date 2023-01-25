@@ -17,3 +17,4 @@ int grep(char *addresses[], int n, char *key, int options);
 void backupFile(char *address);
 int undo(char *address);
 int autoIndent(char *address);
+int compare(char *address1, char *address2);

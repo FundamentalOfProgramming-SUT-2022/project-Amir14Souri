@@ -714,6 +714,41 @@ void inputAndCallCommand()
                 printf("Success\n");
             }
         }
+        else if (strcmp(command, "compare") == 0)
+        {
+            char *file1 = (char *)calloc(100, sizeof(char));
+            char *file2 = (char *)calloc(100, sizeof(char));
+            char *attribute = (char *)calloc(100, sizeof(char));
+
+            // -file1 attribute
+            scanf("%s ", attribute);
+            file1 = inputPath();
+
+            scanf("%s ", attribute);
+            file2 = inputPath();
+
+            int result = compare(file1, file2);
+            if (result == 1)
+            {
+                printf("Invalid path for 1st file\n");
+            }
+            else if (result == 2)
+            {
+                printf("1st file doesn't exist\n");
+            }
+            else if (result == 3)
+            {
+                printf("Invalid path for 2nd file\n");
+            }
+            else if (result == 4)
+            {
+                printf("2nd file doesn't exist\n");
+            }
+            else if (result == 5)
+            {
+                printf("2 files are the same\n");
+            }
+        }
         else if (strcmp(command, "exit") == 0)
         {
             FILE *clipboard = fopen("root/.clipboard.txt", "w");
@@ -1993,5 +2028,234 @@ int autoIndent(char *address)
     FILE *new = fopen(address, "w");
     fprintf(new, "%s", newContent);
     fclose(new);
+    return 0;
+}
+
+int compare(char *address1, char *address2)
+{
+    if (checkPath(address1) == 1)
+    {
+        return 1;
+    }
+    FILE *file1 = fopen(address1, "r");
+    if (file1 == NULL)
+    {
+        return 2;
+    }
+
+    if (checkPath(address2) == 1)
+    {
+        return 3;
+    }
+    FILE *file2 = fopen(address2, "r");
+    if (file2 == NULL)
+    {
+        return 4;
+    }
+
+    char *sentence1 = (char *)calloc(1000, sizeof(char));
+    char *sentence2 = (char *)calloc(1000, sizeof(char));
+    char *word1 = (char *)calloc(1000, sizeof(char));
+    char *word2 = (char *)calloc(1000, sizeof(char));
+    int count = 0, word = 0, line = 1, last = -1, lastLine = -1, modified = 0, saved = 0;
+    char c1 = ' ', c2 = ' ';
+    for (int i = 0;; i++)
+    {
+        if (c1 == ' ')
+        {
+            fscanf(file1, "%s", word1);
+            c1 = fgetc(file1);
+        }
+        else
+        {
+            *word1 = '\0';
+        }
+        if (c2 == ' ')
+        {
+            fscanf(file2, "%s", word2);
+            c2 = fgetc(file2);
+        }
+        else
+        {
+            *word2 = '\0';
+        }
+
+        if (strcmp(word1, word2) != 0)
+        {
+            last = word;
+            count++;
+        }
+        if (c1 == EOF && c2 == EOF)
+        {
+            if (*sentence1 != '\0')
+            {
+                printf("<<<<<<<<<<<< #%d - #%d <<<<<<<<<<<<\n%s", lastLine, line - 1, sentence1);
+            }
+            else if (*sentence2 != '\0')
+            {
+                printf(">>>>>>>>>>>> #%d - #%d >>>>>>>>>>>>\n%s", lastLine, line - 1, sentence2);
+            }
+            break;
+        }
+
+        if (c1 == ' ')
+        {
+            strcat(word1, " ");
+        }
+        if (c2 == ' ')
+        {
+            strcat(word2, " ");
+        }
+        strcat(sentence1, word1);
+        strcat(sentence2, word2);
+        word++;
+
+        if (c1 == '\n' && c2 == '\n')
+        {
+            if (count > 0)
+            {
+                if (count == 1)
+                {
+                    char *copy1 = (char *)calloc(1000, sizeof(char));
+                    char *copy2 = (char *)calloc(1000, sizeof(char));
+                    int space = 0, indent = 0;
+                    for (int j = 0;; j++)
+                    {
+                        char c = *(sentence1 + j);
+
+                        if (last == 0 && j == 0)
+                        {
+                            *copy1 = '>';
+                            *(copy1 + 1) = '>';
+                            *(copy1 + 2) = c;
+                            indent = 2;
+                            continue;
+                        }
+                        if (c == ' ' || c == '\0')
+                        {
+                            space++;
+                            if (space == last)
+                            {
+                                *(copy1 + j) = ' ';
+                                *(copy1 + j + 1) = '>';
+                                *(copy1 + j + 2) = '>';
+                                indent = 2;
+                                continue;
+                            }
+                            if (space == last + 1)
+                            {
+                                *(copy1 + indent + j) = '<';
+                                *(copy1 + indent + j + 1) = '<';
+                                *(copy1 + indent + j + 2) = ' ';
+                                indent = 4;
+                                continue;
+                            }
+                        }
+                        if (c == '\0')
+                        {
+                            *(copy1 + indent + j) = '\0';
+                            break;
+                        }
+
+                        *(copy1 + indent + j) = c;
+                    }
+
+                    space = 0, indent = 0;
+                    for (int j = 0;; j++)
+                    {
+                        char c = *(sentence2 + j);
+
+                        if (last == 0 && j == 0)
+                        {
+                            *copy2 = '>';
+                            *(copy2 + 1) = '>';
+                            *(copy2 + 2) = c;
+                            indent = 2;
+                            continue;
+                        }
+                        if (c == ' ' || c == '\0')
+                        {
+                            space++;
+                            if (space == last)
+                            {
+                                *(copy2 + j) = ' ';
+                                *(copy2 + j + 1) = '>';
+                                *(copy2 + j + 2) = '>';
+                                indent = 2;
+                                continue;
+                            }
+                            if (space == last + 1)
+                            {
+                                *(copy2 + indent + j) = '<';
+                                *(copy2 + indent + j + 1) = '<';
+                                *(copy2 + indent + j + 2) = ' ';
+                                indent = 4;
+                                continue;
+                            }
+                        }
+                        if (c == '\0')
+                        {
+                            *(copy2 + indent + j) = '\0';
+                            break;
+                        }
+
+                        *(copy2 + indent + j) = c;
+                    }
+
+                    printf("============ #%d ============\n%s\n%s\n", line, copy1, copy2);
+                }
+                else
+                {
+                    printf("============ #%d ============\n%s\n%s\n", line, sentence1, sentence2);
+                }
+                modified = 1;
+            }
+            c1 = ' ';
+            c2 = ' ';
+            *sentence1 = '\0';
+            *sentence2 = '\0';
+            *word1 = '\0';
+            *word2 = '\0';
+            last = -1;
+            line++;
+            count = 0;
+            word = 0;
+        }
+        else if (c1 == '\n' && c2 == EOF)
+        {
+            c1 = ' ';
+            strcat(sentence1, "\n");
+            *word1 = '\0';
+            if (saved == 0)
+            {
+                lastLine = line;
+                saved = 1;
+            }
+            line++;
+            count = 0;
+            word = 0;
+            modified = 1;
+        }
+        else if (c1 == EOF && c2 == '\n')
+        {
+            c2 = ' ';
+            strcat(sentence2, "\n");
+            *word2 = '\0';
+            if (saved == 0)
+            {
+                lastLine = line;
+                saved = 1;
+            }
+            line++;
+            count = 0;
+            word = 0;
+            modified = 1;
+        }
+    }
+
+    if (modified == 0)
+    {
+        return 5;
+    }
     return 0;
 }
