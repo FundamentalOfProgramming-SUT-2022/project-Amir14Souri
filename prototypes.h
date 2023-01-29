@@ -1,3 +1,7 @@
+#define FILE_MAX_CHAR 10000
+#define INPUT_MAX_CHAR 200
+#define ATTR_MAX_CHAR 10
+
 void inputAndCallCommand();
 char *inputPath(char *lastChar);
 char *fileName(char *address);

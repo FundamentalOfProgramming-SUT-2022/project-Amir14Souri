@@ -16,7 +16,7 @@ int main()
 void inputAndCallCommand()
 {
     int pipe = 0;
-    char *command = (char *)calloc(10, sizeof(char));
+    char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
     while (1)
     {
         if (pipe == 0)
@@ -28,7 +28,7 @@ void inputAndCallCommand()
 
         if (strcmp(command, "newfile") == 0)
         {
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             scanf("%s ", attribute);
 
             // result
@@ -44,9 +44,9 @@ void inputAndCallCommand()
         else if (strcmp(command, "insert") == 0)
         {
             int line, pos;
-            char *attribute = (char *)calloc(10, sizeof(char));
-            char *file = (char *)calloc(100, sizeof(char));
-            char *data = (char *)calloc(1000, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *data = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
 
             // -file attribute
             scanf("%s ", attribute);
@@ -123,8 +123,8 @@ void inputAndCallCommand()
         else if (strcmp(command, "cat") == 0)
         {
             char *c = (char *)calloc(1, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
-            char *file = (char *)calloc(10, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+            char *file = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
 
             // -file attribute
             scanf("%s ", attribute);
@@ -176,8 +176,8 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "remove") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int line, pos, length;
             char direction;
 
@@ -217,8 +217,8 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "copy") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int line, pos, length;
             char direction;
 
@@ -258,8 +258,8 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "cut") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int line, pos, length;
             char direction;
 
@@ -299,8 +299,8 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "paste") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int line, pos;
 
             // -file attribute
@@ -329,9 +329,9 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "find") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *key = (char *)calloc(1000, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int options = 0, at = 1;
 
             // -str attribute
@@ -471,10 +471,10 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "replace") == 0)
         {
-            char *file = (char *)calloc(100, sizeof(char));
-            char *key = (char *)calloc(1000, sizeof(char));
-            char *alternate = (char *)calloc(1000, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+            char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int options = 0, at = 1;
 
             // -str1 (key) attribute
@@ -624,8 +624,8 @@ void inputAndCallCommand()
         else if (strcmp(command, "grep") == 0)
         {
             char *files[50];
-            char *key = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *key = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int options = 0, n = 0;
             char c;
 
@@ -696,7 +696,7 @@ void inputAndCallCommand()
                     c = ' ';
                     for (int j = 0; c != '\n'; j++)
                     {
-                        files[n] = (char *)calloc(100, sizeof(char));
+                        files[n] = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
                         c = getchar();
                         char end;
                         if (c == '"')
@@ -785,8 +785,8 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "undo") == 0)
         {
-            char *attribute = (char *)calloc(10, sizeof(char));
-            char *file = (char *)calloc(100, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
             scanf("%s ", attribute);
             int result = undo(inputPath(NULL));
@@ -809,7 +809,7 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "auto-indent") == 0)
         {
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             scanf("%s ", attribute);
 
             // result
@@ -834,9 +834,9 @@ void inputAndCallCommand()
         else if (strcmp(command, "compare") == 0)
         {
             char *c = (char *)calloc(1, sizeof(char));
-            char *file1 = (char *)calloc(100, sizeof(char));
-            char *file2 = (char *)calloc(100, sizeof(char));
-            char *attribute = (char *)calloc(100, sizeof(char));
+            char *file1 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *file2 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *attribute = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
             // -file1 attribute
             file1 = inputPath(c);
@@ -903,7 +903,7 @@ void inputAndCallCommand()
         else if (strcmp(command, "tree") == 0)
         {
             int depth;
-            char *attribute = (char *)calloc(10, sizeof(char));
+            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
             int history[200] = {0};
 
             // depth
@@ -980,7 +980,7 @@ void inputAndCallCommand()
 
 char *inputPath(char *lastChar)
 {
-    char *file = (char *)calloc(100, sizeof(char));
+    char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
     char c = getchar();
     char end = (c == '"') ? '"' : ' ';
     if (end == '"')
@@ -1040,7 +1040,7 @@ char *fileName(char *address)
 
 char *filePath(char *address)
 {
-    char *path = (char *)calloc(100, sizeof(char));
+    char *path = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
     int last = -1;
     for (int i = 0;; i++)
     {
@@ -1069,7 +1069,7 @@ char *filePath(char *address)
 
 int newFile(char *address)
 {
-    char *path = (char *)calloc(100, sizeof(char));
+    char *path = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
     for (int i = 0;; i++)
     {
         if (address[i] == '/')
@@ -1132,7 +1132,7 @@ int insert(char *address, char *string, int line, int pos)
         return 2;
     }
 
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     int curLine = 0;
     for (int i = -1;; i++)
     {
@@ -1225,7 +1225,7 @@ int cat(char *address, FILE *where)
         return 2;
     }
 
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     for (int i = 0;; i++)
     {
         char c = fgetc(file);
@@ -1254,8 +1254,8 @@ int removeString(char *address, int line, int pos, int length, char direction)
         return 2;
     }
 
-    char *content = (char *)calloc(1000, sizeof(char));
-    char *newContent = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char *newContent = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     int curLine = 1, curPos = 0, start = 0, indent = 0;
     for (int i = 0;; i++)
     {
@@ -1320,7 +1320,7 @@ int copy(char *address, int line, int pos, int length, char direction)
         return 2;
     }
 
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     char *target = (char *)calloc(length, sizeof(char));
     int curLine = 1, curPos = 0, start = 0;
     for (int i = 0;; i++)
@@ -1394,7 +1394,7 @@ int cut(char *address, int line, int pos, int length, char direction)
 int paste(char *address, int line, int pos)
 {
     FILE *clipboard = fopen("root/.clipboard.txt", "r");
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     for (int i = 0;; i++)
     {
         char c = fgetc(clipboard);
@@ -1437,9 +1437,9 @@ int find(char *address, char *key, int options, int at, FILE *where)
         return 2;
     }
 
-    int startA[100][2];
-    char *content = (char *)calloc(1000, sizeof(char));
-    for (int i = 0; i < 100; i++)
+    int startA[INPUT_MAX_CHAR][2];
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    for (int i = 0; i < INPUT_MAX_CHAR; i++)
     {
         startA[i][0] = -1;
         startA[i][1] = -1;
@@ -1617,7 +1617,7 @@ int find(char *address, char *key, int options, int at, FILE *where)
         }
         break;
     case 8:
-    case 10:
+    case ATTR_MAX_CHAR:
         int count = 0;
         for (int i = 0; startA[i][0] != -1; i++)
         {
@@ -1661,9 +1661,9 @@ int replace(char *address, char *key, char *alternate, int options, int at)
         return 2;
     }
 
-    int interval[100][2];
-    char *content = (char *)calloc(1000, sizeof(char));
-    for (int i = 0; i < 100; i++)
+    int interval[INPUT_MAX_CHAR][2];
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    for (int i = 0; i < INPUT_MAX_CHAR; i++)
     {
         interval[i][0] = -1;
         interval[i][1] = -1;
@@ -1800,7 +1800,7 @@ int replace(char *address, char *key, char *alternate, int options, int at)
     fclose(file);
 
     at--;
-    char *newContent = (char *)calloc(1000, sizeof(char));
+    char *newContent = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     switch (options)
     {
     case 0:
@@ -1874,7 +1874,7 @@ int grep(char *addresses[], int n, char *key, int options, FILE *where)
         matches[i][0] = -1;
         matches[i][1] = -1;
     }
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     for (int i = 0; i < n; i++)
     {
         if (checkPath(addresses[i]) == 1)
@@ -1998,7 +1998,7 @@ int grep(char *addresses[], int n, char *key, int options, FILE *where)
 
 void backupFile(char *address)
 {
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     FILE *file = fopen(address, "r");
     for (int i = 0;; i++)
     {
@@ -2042,7 +2042,7 @@ int undo(char *address)
         return 3;
     }
 
-    char *backupContent = (char *)calloc(1000, sizeof(char));
+    char *backupContent = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     for (int i = 0;; i++)
     {
         char c = fgetc(backup);
@@ -2074,8 +2074,8 @@ int autoIndent(char *address)
         return 2;
     }
 
-    char *newContent = (char *)calloc(1000, sizeof(char));
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *newContent = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     int space = 0, ok = 0, bracket = 0;
     for (int i = 0;; i++)
     {
@@ -2261,10 +2261,10 @@ int compare(char *address1, char *address2, FILE *where)
         return 4;
     }
 
-    char *sentence1 = (char *)calloc(1000, sizeof(char));
-    char *sentence2 = (char *)calloc(1000, sizeof(char));
-    char *word1 = (char *)calloc(1000, sizeof(char));
-    char *word2 = (char *)calloc(1000, sizeof(char));
+    char *sentence1 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char *sentence2 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char *word1 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char *word2 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     int count = 0, word = 0, line = 1, last = -1, lastLine = -1, modified = 0, saved = 0;
     char c1 = ' ', c2 = ' ';
     for (int i = 0;; i++)
@@ -2324,8 +2324,8 @@ int compare(char *address1, char *address2, FILE *where)
             {
                 if (count == 1)
                 {
-                    char *copy1 = (char *)calloc(1000, sizeof(char));
-                    char *copy2 = (char *)calloc(1000, sizeof(char));
+                    char *copy1 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+                    char *copy2 = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
                     int space = 0, indent = 0;
                     for (int j = 0;; j++)
                     {
@@ -2511,7 +2511,7 @@ int tree(char *dir, int depth, int limit, int history[], FILE *where)
         }
         else if (entry->d_type == DT_DIR)
         {
-            char *subDir = (char *)calloc(100, sizeof(char));
+            char *subDir = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
             strcat(subDir, dir);
             strcat(subDir, "/");
             strcat(subDir, name);
@@ -2553,7 +2553,7 @@ void indentTree(int depth, int history[], FILE *where)
 char *readPipe()
 {
     FILE *pipe = fopen("root/.pipe.txt", "r");
-    char *content = (char *)calloc(1000, sizeof(char));
+    char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
 
     for (int i = 0;; i++)
     {
