@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+#include <dirent.h>
 #include "prototypes.h"
 
 int main()
@@ -14,10 +15,14 @@ int main()
 
 void inputAndCallCommand()
 {
+    int pipe = 0;
+    char *command = (char *)calloc(10, sizeof(char));
     while (1)
     {
-        char *command = (char *)calloc(10, sizeof(char));
-        scanf("%s", command);
+        if (pipe == 0)
+        {
+            scanf("%s", command);
+        }
         char trash = 'a';
         trash = getchar();
 
@@ -27,7 +32,7 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
 
             // result
-            if (newFile(inputPath()) == 1)
+            if (newFile(inputPath(NULL)) == 1)
             {
                 printf("This file already exists\n");
             }
@@ -45,46 +50,54 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            file = inputPath();
+            file = inputPath(NULL);
             getchar();
 
             // -str attribute
-            scanf("%s ", attribute);
-            char c = getchar();
-            char end = (c == '"') ? '"' : ' ';
-            for (int i = 0;; i++)
+            if (pipe == 1)
             {
-                if (i != 0 || end == '"')
+                data = readPipe();
+                pipe = 0;
+            }
+            else
+            {
+                scanf("%s ", attribute);
+                char c = getchar();
+                char end = (c == '"') ? '"' : ' ';
+                for (int i = 0;; i++)
                 {
-                    c = getchar();
-                }
-                if (c == '\\')
-                {
-                    c = getchar();
-                    switch (c)
+                    if (i != 0 || end == '"')
                     {
-                    case 'n':
-                        c = '\n';
-                        break;
-                    case '\\':
-                        c = '\\';
-                        break;
-                    case '"':
-                        c = '\"';
+                        c = getchar();
+                    }
+                    if (c == '\\')
+                    {
+                        c = getchar();
+                        switch (c)
+                        {
+                        case 'n':
+                            c = '\n';
+                            break;
+                        case '\\':
+                            c = '\\';
+                            break;
+                        case '"':
+                            c = '\"';
+                            break;
+                        }
+                    }
+                    else if (c == end || c == '\n')
+                    {
+                        *(data + i) = '\0';
                         break;
                     }
-                }
-                else if (c == end || c == '\n')
-                {
-                    *(data + i) = '\0';
-                    break;
-                }
 
-                *(data + i) = c;
-            }
-            if (end == '"')
-            {
-                getchar();
+                    *(data + i) = c;
+                }
+                if (end == '"')
+                {
+                    getchar();
+                }
             }
 
             // -pos attribute
@@ -109,12 +122,38 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "cat") == 0)
         {
-
+            char *c = (char *)calloc(1, sizeof(char));
             char *attribute = (char *)calloc(10, sizeof(char));
+            char *file = (char *)calloc(10, sizeof(char));
+
+            // -file attribute
             scanf("%s ", attribute);
+            file = inputPath(c);
+
+            // pipe possibility
+            if (*c == ' ')
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "=D") == 0)
+                {
+                    pipe = 1;
+                    scanf("%s", command);
+                }
+            }
 
             // result
-            int result = cat(inputPath());
+            int result;
+            if (pipe == 0)
+            {
+                result = cat(file, stdout);
+            }
+            else
+            {
+                FILE *pipe = fopen("root/.pipe.txt", "w");
+                result = cat(file, pipe);
+                fclose(pipe);
+            }
+
             if (result == 1)
             {
                 printf("Invalid path\n");
@@ -122,6 +161,17 @@ void inputAndCallCommand()
             else if (result == 2)
             {
                 printf("File doesn't exist\n");
+            }
+            if (pipe == 1 && result != 0)
+            {
+                pipe = 0;
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
             }
         }
         else if (strcmp(command, "remove") == 0)
@@ -133,7 +183,7 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            file = inputPath();
+            file = inputPath(NULL);
 
             // -pos attribute
             scanf("%s ", attribute);
@@ -174,7 +224,7 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            file = inputPath();
+            file = inputPath(NULL);
 
             // -pos attribute
             scanf("%s ", attribute);
@@ -215,7 +265,7 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            file = inputPath();
+            file = inputPath(NULL);
 
             // -pos attribute
             scanf("%s ", attribute);
@@ -255,7 +305,7 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            file = inputPath();
+            file = inputPath(NULL);
 
             // -pos attribute
             scanf("%s ", attribute);
@@ -285,74 +335,65 @@ void inputAndCallCommand()
             int options = 0, at = 1;
 
             // -str attribute
-            scanf("%s ", attribute);
-            char c = getchar();
-            char end = (c == '"') ? '"' : ' ';
-            for (int i = 0;; i++)
+            if (pipe == 1)
             {
-                if (i != 0 || end == '"')
+                pipe = 0;
+                key = readPipe();
+            }
+            else
+            {
+                scanf("%s ", attribute);
+                char c = getchar();
+                char end = (c == '"') ? '"' : ' ';
+                for (int i = 0;; i++)
                 {
-                    c = getchar();
-                }
-                if (c == '\\')
-                {
-                    c = getchar();
-                    switch (c)
+                    if (i != 0 || end == '"')
                     {
-                    case 'n':
-                        c = '\n';
-                        break;
-                    case '\\':
-                        c = '\\';
-                        break;
-                    case '"':
-                        c = '\"';
-                        break;
-                    case '*':
-                        *(key + i) = '\\';
-                        c = '*';
-                        i++;
+                        c = getchar();
+                    }
+                    if (c == '\\')
+                    {
+                        c = getchar();
+                        switch (c)
+                        {
+                        case 'n':
+                            c = '\n';
+                            break;
+                        case '\\':
+                            c = '\\';
+                            break;
+                        case '"':
+                            c = '\"';
+                            break;
+                        case '*':
+                            *(key + i) = '\\';
+                            c = '*';
+                            i++;
+                            break;
+                        }
+                    }
+                    else if (c == end || c == '\n')
+                    {
+                        *(key + i) = '\0';
                         break;
                     }
-                }
-                else if (c == end || c == '\n')
-                {
-                    *(key + i) = '\0';
-                    break;
-                }
 
-                *(key + i) = c;
-            }
-            if (end == '"')
-            {
-                getchar();
+                    *(key + i) = c;
+                }
+                if (end == '"')
+                {
+                    getchar();
+                }
             }
 
             // -file attribute
             scanf("%s ", attribute);
-            c = getchar();
-            end = (c == '"') ? '"' : ' ';
-            if (end == '"')
-            {
-                getchar();
-            }
-            for (int i = 0;; i++)
-            {
-                c = getchar();
-                if (c == end || c == '\n')
-                {
-                    *(file + i) = '\0';
-                    break;
-                }
-                *(file + i) = c;
-            }
-            if (end == '"')
-            {
-                c = getchar();
-            }
+            char *last = (char *)calloc(1, sizeof(char));
+            file = inputPath(last);
+            char c = *last;
 
-            // possible options
-            for (int i = 0; i < 4; i++)
+            // possible options (or pipe)
+            for (int i = 0; i < 5; i++)
             {
                 if (c == ' ')
                 {
@@ -378,6 +419,12 @@ void inputAndCallCommand()
                         options++;
                         c = getchar();
                     }
+                    else if (strcmp(attribute, "=D") == 0)
+                    {
+                        pipe = 1;
+                        scanf(" %s", command);
+                        break;
+                    }
                 }
                 else
                 {
@@ -386,7 +433,18 @@ void inputAndCallCommand()
             }
 
             // result
-            int result = find(file, key, options, at);
+            int result;
+            if (pipe == 0)
+            {
+                result = find(file, key, options, at, stdout);
+            }
+            else
+            {
+                FILE *pipe = fopen("root/.pipe.txt", "w");
+                result = find(file, key, options, at, pipe);
+                fclose(pipe);
+            }
+
             if (result == 1)
             {
                 printf("Invalid path\n");
@@ -399,6 +457,17 @@ void inputAndCallCommand()
             {
                 printf("Invalid set of options!\n");
             }
+            if (pipe == 1 && result != 0)
+            {
+                pipe = 0;
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+            }
         }
         else if (strcmp(command, "replace") == 0)
         {
@@ -409,53 +478,61 @@ void inputAndCallCommand()
             int options = 0, at = 1;
 
             // -str1 (key) attribute
-            scanf("%s ", attribute);
-            char c = getchar();
-            char end = (c == '"') ? '"' : ' ';
-            for (int i = 0;; i++)
+            if (pipe == 1)
             {
-                if (i != 0 || end == '"')
+                pipe = 0;
+                key = readPipe();
+            }
+            else
+            {
+                scanf("%s ", attribute);
+                char c = getchar();
+                char end = (c == '"') ? '"' : ' ';
+                for (int i = 0;; i++)
                 {
-                    c = getchar();
-                }
-                if (c == '\\')
-                {
-                    c = getchar();
-                    switch (c)
+                    if (i != 0 || end == '"')
                     {
-                    case 'n':
-                        c = '\n';
-                        break;
-                    case '\\':
-                        c = '\\';
-                        break;
-                    case '"':
-                        c = '\"';
-                        break;
-                    case '*':
-                        *(key + i) = '\\';
-                        c = '*';
-                        i++;
+                        c = getchar();
+                    }
+                    if (c == '\\')
+                    {
+                        c = getchar();
+                        switch (c)
+                        {
+                        case 'n':
+                            c = '\n';
+                            break;
+                        case '\\':
+                            c = '\\';
+                            break;
+                        case '"':
+                            c = '\"';
+                            break;
+                        case '*':
+                            *(key + i) = '\\';
+                            c = '*';
+                            i++;
+                            break;
+                        }
+                    }
+                    else if (c == end || c == '\n')
+                    {
+                        *(key + i) = '\0';
                         break;
                     }
-                }
-                else if (c == end || c == '\n')
-                {
-                    *(key + i) = '\0';
-                    break;
-                }
 
-                *(key + i) = c;
-            }
-            if (end == '"')
-            {
-                getchar();
+                    *(key + i) = c;
+                }
+                if (end == '"')
+                {
+                    getchar();
+                }
             }
 
             // -str2 (alternate) attribute
             scanf("%s ", attribute);
-            c = getchar();
-            end = (c == '"') ? '"' : ' ';
+            char c = getchar();
+            char end = (c == '"') ? '"' : ' ';
             for (int i = 0;; i++)
             {
                 if (i != 0 || end == '"')
@@ -493,28 +570,11 @@ void inputAndCallCommand()
 
             // -file attribute
             scanf("%s ", attribute);
-            c = getchar();
-            end = (c == '"') ? '"' : ' ';
-            if (end == '"')
-            {
-                getchar();
-            }
-            for (int i = 0;; i++)
-            {
-                c = getchar();
-                if (c == end || c == '\n')
-                {
-                    *(file + i) = '\0';
-                    break;
-                }
-                *(file + i) = c;
-            }
-            if (end == '"')
-            {
-                c = getchar();
-            }
+            char *last = (char *)calloc(1, sizeof(char));
+            file = inputPath(last);
+            c = *last;
 
-            // possible options
+            // possible options (or pipe)
             for (int i = 0; i < 2; i++)
             {
                 if (c == ' ')
@@ -567,8 +627,9 @@ void inputAndCallCommand()
             char *key = (char *)calloc(100, sizeof(char));
             char *attribute = (char *)calloc(10, sizeof(char));
             int options = 0, n = 0;
+            char c;
 
-            // -file, -str and options
+            // -files, -str and options
             for (int i = 0; i < 3; i++)
             {
                 scanf("%s ", attribute);
@@ -586,7 +647,7 @@ void inputAndCallCommand()
                     {
                         i++;
                     }
-                    char c = getchar();
+                    c = getchar();
                     char end = (c == '"') ? '"' : ' ';
                     for (int i = 0;; i++)
                     {
@@ -617,42 +678,87 @@ void inputAndCallCommand()
                     }
                     if (end == '"')
                     {
-                        getchar();
+                        c = getchar();
                     }
                 }
                 else if (strcmp(attribute, "-files") == 0)
                 {
-                    char c = ' ';
+                    if (i == 0)
+                    {
+                        i++;
+                    }
+                    if (pipe == 1)
+                    {
+                        i++;
+                        pipe = 0;
+                        key = readPipe();
+                    }
+                    c = ' ';
                     for (int j = 0; c != '\n'; j++)
                     {
                         files[n] = (char *)calloc(100, sizeof(char));
                         c = getchar();
-                        char end = (c == '"') ? '"' : ' ';
+                        char end;
+                        if (c == '"')
+                        {
+                            end = '"';
+                        }
+                        else if (c == '=')
+                        {
+                            c = ' ';
+                            break;
+                        }
+                        else
+                        {
+                            end = ' ';
+                        }
                         if (end == '"')
                         {
                             getchar();
                         }
-                        for (int k = 0;; k++)
+                        for (int i = 0;; i++)
                         {
                             c = getchar();
                             if (c == end || c == '\n')
                             {
-                                *(files[n] + k) = '\0';
-                                n++;
+                                *(files[n] + i) = '\0';
                                 break;
                             }
-                            *(files[n] + k) = c;
+                            *(files[n] + i) = c;
                         }
                         if (end == '"')
                         {
-                            getchar();
+                            c = getchar();
                         }
+                        n++;
                     }
                 }
             }
 
+            // pipe possibility
+            if (c == ' ')
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "D") == 0)
+                {
+                    pipe = 1;
+                    scanf("%s", command);
+                }
+            }
+
             // result
-            int result = grep(files, n, key, options);
+            int result;
+            if (pipe == 0)
+            {
+                result = grep(files, n, key, options, stdout);
+            }
+            else
+            {
+                FILE *pipe = fopen("root/.pipe.txt", "w");
+                result = grep(files, n, key, options, pipe);
+                fclose(pipe);
+            }
+
             if (result == 1)
             {
                 printf("Some invalid path\n");
@@ -665,6 +771,17 @@ void inputAndCallCommand()
             {
                 printf("Not found!\n");
             }
+            if (pipe == 1 && result != 0)
+            {
+                pipe = 0;
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+            }
         }
         else if (strcmp(command, "undo") == 0)
         {
@@ -672,7 +789,7 @@ void inputAndCallCommand()
             char *file = (char *)calloc(100, sizeof(char));
 
             scanf("%s ", attribute);
-            int result = undo(inputPath());
+            int result = undo(inputPath(NULL));
             if (result == 1)
             {
                 printf("Invalid path\n");
@@ -696,7 +813,7 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
 
             // result
-            int result = autoIndent(inputPath());
+            int result = autoIndent(inputPath(NULL));
             if (result == 1)
             {
                 printf("Invalid path\n");
@@ -716,18 +833,41 @@ void inputAndCallCommand()
         }
         else if (strcmp(command, "compare") == 0)
         {
+            char *c = (char *)calloc(1, sizeof(char));
             char *file1 = (char *)calloc(100, sizeof(char));
             char *file2 = (char *)calloc(100, sizeof(char));
             char *attribute = (char *)calloc(100, sizeof(char));
 
             // -file1 attribute
-            scanf("%s ", attribute);
-            file1 = inputPath();
+            file1 = inputPath(c);
 
-            scanf("%s ", attribute);
-            file2 = inputPath();
+            // -file2 attribute
+            file2 = inputPath(c);
 
-            int result = compare(file1, file2);
+            // pipe possibility
+            if (*c == ' ')
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "=D") == 0)
+                {
+                    pipe = 1;
+                    scanf("%s", command);
+                }
+            }
+
+            // result
+            int result;
+            if (pipe == 0)
+            {
+                result = compare(file1, file2, stdout);
+            }
+            else
+            {
+                FILE *pipe = fopen("root/.pipe.txt", "w");
+                result = compare(file1, file2, pipe);
+                fclose(pipe);
+            }
+
             if (result == 1)
             {
                 printf("Invalid path for 1st file\n");
@@ -748,11 +888,74 @@ void inputAndCallCommand()
             {
                 printf("2 files are the same\n");
             }
+            if (pipe == 1 && result != 0)
+            {
+                pipe = 0;
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        else if (strcmp(command, "tree") == 0)
+        {
+            int depth;
+            char *attribute = (char *)calloc(10, sizeof(char));
+            int history[200] = {0};
+
+            // depth
+            scanf("%d", &depth);
+            char c = getchar();
+
+            // pipe possibility
+            if (c == ' ')
+            {
+                scanf("%s ", attribute);
+                if (strcmp(attribute, "=D") == 0)
+                {
+                    pipe = 1;
+                    scanf("%s", command);
+                }
+            }
+
+            // result
+            int result;
+            if (pipe == 0)
+            {
+                result = tree("root", 0, depth, history, stdout);
+            }
+            else
+            {
+                FILE *pipe = fopen("root/.pipe.txt", "w");
+                result = tree("root", 0, depth, history, pipe);
+                fclose(pipe);
+            }
+
+            if (result == 1)
+            {
+                printf("Invalid depth!\n");
+            }
+            if (pipe == 1 && result != 0)
+            {
+                pipe = 0;
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+            }
         }
         else if (strcmp(command, "exit") == 0)
         {
             FILE *clipboard = fopen("root/.clipboard.txt", "w");
             fclose(clipboard);
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            fclose(pipe);
             break;
         }
         else
@@ -775,7 +978,7 @@ void inputAndCallCommand()
     }
 }
 
-char *inputPath()
+char *inputPath(char *lastChar)
 {
     char *file = (char *)calloc(100, sizeof(char));
     char c = getchar();
@@ -796,7 +999,11 @@ char *inputPath()
     }
     if (end == '"')
     {
-        getchar();
+        c = getchar();
+    }
+    if (lastChar != NULL)
+    {
+        *lastChar = c;
     }
 
     return file;
@@ -1006,7 +1213,7 @@ int insert(char *address, char *string, int line, int pos)
     return 0;
 }
 
-int cat(char *address)
+int cat(char *address, FILE *where)
 {
     if (checkPath(address) == 1)
     {
@@ -1031,7 +1238,7 @@ int cat(char *address)
         *(content + i) = c;
     }
     fclose(file);
-    printf("%s", content);
+    fprintf(where, "%s", content);
     return 0;
 }
 
@@ -1204,7 +1411,7 @@ int paste(char *address, int line, int pos)
     return insert(address, content, line, pos);
 }
 
-int find(char *address, char *key, int options, int at)
+int find(char *address, char *key, int options, int at, FILE *where)
 {
     switch (options)
     {
@@ -1392,7 +1599,7 @@ int find(char *address, char *key, int options, int at)
         }
         else
         {
-            printFind(startA, at, (options / 2) % 2);
+            printFind(startA, at, (options / 2) % 2, where);
         }
         break;
     case 1:
@@ -1405,7 +1612,7 @@ int find(char *address, char *key, int options, int at)
         {
             for (int i = 0; startA[i][0] != -1; i++)
             {
-                printFind(startA, i, (options / 2) % 2);
+                printFind(startA, i, (options / 2) % 2, where);
             }
         }
         break;
@@ -1416,14 +1623,14 @@ int find(char *address, char *key, int options, int at)
         {
             count++;
         }
-        printf("Number of matches: %d\n", count);
+        fprintf(where, "Number of matches: %d\n", count);
         break;
     }
 
     return 0;
 }
 
-void printFind(int startA[][2], int i, int by)
+void printFind(int startA[][2], int i, int by, FILE *where)
 {
     char *byStr = (char *)calloc(8, sizeof(char));
     if (by == 0)
@@ -1434,7 +1641,7 @@ void printFind(int startA[][2], int i, int by)
     {
         byStr = "by word";
     }
-    printf("match %2d (%s): %3d\n", i + 1, byStr, startA[i][by]);
+    fprintf(where, "match %2d (%s): %3d\n", i + 1, byStr, startA[i][by]);
 }
 
 int replace(char *address, char *key, char *alternate, int options, int at)
@@ -1659,7 +1866,7 @@ int replace(char *address, char *key, char *alternate, int options, int at)
     return 0;
 }
 
-int grep(char *addresses[], int n, char *key, int options)
+int grep(char *addresses[], int n, char *key, int options, FILE *where)
 {
     int matches[200][2], count = 0;
     for (int i = 0; i < 200; i++)
@@ -1736,7 +1943,7 @@ int grep(char *addresses[], int n, char *key, int options)
                     char c = *(content + k);
                     if (line == matches[j][1])
                     {
-                        putc(c, stdout);
+                        fputc(c, where);
                         if (c == '\n')
                         {
                             k++;
@@ -1767,7 +1974,7 @@ int grep(char *addresses[], int n, char *key, int options)
         return 0;
         break;
     case 1:
-        printf("%d\n", count);
+        fprintf(where, "%d\n", count);
         return 0;
         break;
     case 2:
@@ -1780,7 +1987,8 @@ int grep(char *addresses[], int n, char *key, int options)
         {
             if (matches[i][0] != last)
             {
-                printf("/%s\n", addresses[++last]);
+                fprintf(where, "/%s\n", addresses[matches[i][0]]);
+                last = matches[i][0];
             }
         }
         return 0;
@@ -2031,7 +2239,7 @@ int autoIndent(char *address)
     return 0;
 }
 
-int compare(char *address1, char *address2)
+int compare(char *address1, char *address2, FILE *where)
 {
     if (checkPath(address1) == 1)
     {
@@ -2089,11 +2297,11 @@ int compare(char *address1, char *address2)
         {
             if (*sentence1 != '\0')
             {
-                printf("<<<<<<<<<<<< #%d - #%d <<<<<<<<<<<<\n%s", lastLine, line - 1, sentence1);
+                fprintf(where, "<<<<<<<<<<<< #%d - #%d <<<<<<<<<<<<\n%s", lastLine, line - 1, sentence1);
             }
             else if (*sentence2 != '\0')
             {
-                printf(">>>>>>>>>>>> #%d - #%d >>>>>>>>>>>>\n%s", lastLine, line - 1, sentence2);
+                fprintf(where, ">>>>>>>>>>>> #%d - #%d >>>>>>>>>>>>\n%s", lastLine, line - 1, sentence2);
             }
             break;
         }
@@ -2202,11 +2410,11 @@ int compare(char *address1, char *address2)
                         *(copy2 + indent + j) = c;
                     }
 
-                    printf("============ #%d ============\n%s\n%s\n", line, copy1, copy2);
+                    fprintf(where, "============ #%d ============\n%s\n%s\n", line, copy1, copy2);
                 }
                 else
                 {
-                    printf("============ #%d ============\n%s\n%s\n", line, sentence1, sentence2);
+                    fprintf(where, "============ #%d ============\n%s\n%s\n", line, sentence1, sentence2);
                 }
                 modified = 1;
             }
@@ -2258,4 +2466,105 @@ int compare(char *address1, char *address2)
         return 5;
     }
     return 0;
+}
+
+int tree(char *dir, int depth, int limit, int history[], FILE *where)
+{
+    if (limit < -1)
+    {
+        return 1;
+    }
+
+    indentTree(depth, history, where);
+    fprintf(where, "%s\n", fileName(dir));
+    depth++;
+    if (limit != -1 && depth == limit + 1)
+    {
+        return 0;
+    }
+
+    int count = 0;
+    DIR *folder = opendir(dir);
+    struct dirent *entry;
+    while ((entry = readdir(folder)) != NULL)
+    {
+        char *name = entry->d_name;
+        if (*name != '.')
+        {
+            count++;
+        }
+    }
+    rewinddir(folder);
+    for (int i = 0; (entry = readdir(folder)) != NULL; i++)
+    {
+        char *name = entry->d_name;
+        if (*name == '.')
+        {
+            i--;
+            continue;
+        }
+
+        if (entry->d_type == DT_REG)
+        {
+            indentTree(depth, history, where);
+            fprintf(where, "%s\n", name);
+        }
+        else if (entry->d_type == DT_DIR)
+        {
+            char *subDir = (char *)calloc(100, sizeof(char));
+            strcat(subDir, dir);
+            strcat(subDir, "/");
+            strcat(subDir, name);
+            if (i != count - 1)
+            {
+                history[depth - 1] = 1;
+            }
+            else if (i == count - 1)
+            {
+
+                history[depth - 1] = 0;
+            }
+            tree(subDir, depth, limit, history, where);
+        }
+    }
+    closedir(folder);
+    return 0;
+}
+
+void indentTree(int depth, int history[], FILE *where)
+{
+    for (int i = 0; i < depth; i++)
+    {
+        if (i == depth - 1)
+        {
+            fprintf(where, "|--- ");
+        }
+        else if (history[i] == 1)
+        {
+            fprintf(where, "|    ");
+        }
+        else
+        {
+            fprintf(where, "     ");
+        }
+    }
+}
+
+char *readPipe()
+{
+    FILE *pipe = fopen("root/.pipe.txt", "r");
+    char *content = (char *)calloc(1000, sizeof(char));
+
+    for (int i = 0;; i++)
+    {
+        char c = fgetc(pipe);
+        if (c == EOF)
+        {
+            *(content + i - 1) = '\0';
+            break;
+        }
+        *(content + i) = c;
+    }
+    fclose(pipe);
+    return content;
 }
