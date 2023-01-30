@@ -104,6 +104,13 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
             scanf("%d:%d", &line, &pos);
             getchar();
+            if (line <= 0 || pos < 0)
+            {
+                printf("Invalid position\n");
+                pipe = 0;
+                continue;
+            }
+            
 
             // result
             int result = insert(file, data, line, pos);
@@ -189,11 +196,35 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
             scanf("%d:%d", &line, &pos);
             getchar();
+            if (line <= 0 || pos < 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid position\n");
+                continue;
+            }
 
             // -size attribute
             scanf("%s ", attribute);
             scanf("%d", &length);
             getchar();
+            if (length <= 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid size\n");
+                continue;
+            }
 
             // -f or -b flag
             scanf("%s", attribute);
@@ -230,11 +261,35 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
             scanf("%d:%d", &line, &pos);
             getchar();
+            if (line <= 0 || pos < 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid position\n");
+                continue;
+            }
 
             // -size attribute
             scanf("%s ", attribute);
             scanf("%d", &length);
             getchar();
+            if (length <= 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid size\n");
+                continue;
+            }
 
             // -f or -b flag
             scanf("%s", attribute);
@@ -271,11 +326,35 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
             scanf("%d:%d", &line, &pos);
             getchar();
+            if (line <= 0 || pos < 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid position\n");
+                continue;
+            }
 
             // -size attribute
             scanf("%s ", attribute);
             scanf("%d", &length);
             getchar();
+            if (length <= 0)
+            {
+                while (1)
+                {
+                    if (getchar() == '\n')
+                    {
+                        break;
+                    }
+                }
+                printf("Invalid size\n");
+                continue;
+            }
 
             // -f or -b flag
             scanf("%s", attribute);
@@ -311,6 +390,11 @@ void inputAndCallCommand()
             scanf("%s ", attribute);
             scanf("%d:%d", &line, &pos);
             getchar();
+            if (line <= 0 || pos < 0)
+            {
+                printf("Invalid position\n");
+                continue;
+            }
 
             // result
             int result = paste(file, line, pos);
