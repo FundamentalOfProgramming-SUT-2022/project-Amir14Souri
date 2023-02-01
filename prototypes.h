@@ -6,6 +6,7 @@
 #define MODE_COLOR 3
 #define FILE_NAME_COLOR 4
 #define LINE_NO_COLOR 5
+#define HIGHLIGHT_COLOR 6
 
 int inputAndCallCommand();
 char *inputPath(char *lastChar, char *input, int *loc);
@@ -15,6 +16,7 @@ int newFile(char *address);
 int checkPath(char *address);
 int insert(char *address, char *string, int line, int pos);
 int cat(char *address, FILE *where);
+void open(char *address);
 int removeString(char *address, int line, int pos, int length, char direction);
 int copy(char *address, int line, int pos, int length, char direction);
 int cut(char *address, int line, int pos, int length, char direction);
@@ -37,3 +39,6 @@ void clearBar();
 void clearLine(int line);
 void clearScreen();
 void initLine(int no);
+void highlight(int x1, int y1, int x2, int y2);
+void clearHighlight();
+void changeMode(char *mode);

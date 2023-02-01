@@ -9,11 +9,14 @@
 
 WINDOW *commandBar;
 int map[100];
+int openStatus = 0, exist = 0, preLine = 0, selectLength = 0;
+char *currentFileName;
 
 // int pipe = 0;
 
 int main()
 {
+    currentFileName = (char *)calloc(200, sizeof(char));
     for (int i = 0; i < 100; i++)
     {
         map[i] = -1;
@@ -25,7 +28,7 @@ int main()
 
     // setting background color
     start_color();
-    init_pair(BG_COLOR, COLOR_WHITE, 17);
+    init_pair(BG_COLOR, 15, 17);
     bkgd(COLOR_PAIR(BG_COLOR));
     refresh();
     initWindow(commandBar);
@@ -48,32 +51,32 @@ int main()
             attroff(COLOR_PAIR(BAR_COLOR));
             noecho();
         }
-        else if (c == ACS_RARROW || c == 'l')
+        else if (c == 'l')
         {
             int x, y;
             getyx(stdscr, y, x);
-            if (map[y] >= x - 1)
+            if (map[y + preLine] >= x - 1)
             {
                 move(y, x + 1);
             }
         }
-        else if (c == ACS_DARROW || c == 'j')
+        else if (c == 'j')
         {
             int x, y;
             getyx(stdscr, y, x);
-            if (map[y + 1] != -1)
+            if (map[y + preLine + 1] != -1)
             {
-                if (map[y + 1] - 1 >= x - 3)
+                if (map[y + preLine + 1] >= x - 2)
                 {
                     move(y + 1, x);
                 }
                 else
                 {
-                    move(y + 1, map[y + 1] + 2);
+                    move(y + 1, map[y + preLine + 1] + 2);
                 }
             }
         }
-        else if (c == ACS_LARROW || c == 'h')
+        else if (c == 'h')
         {
             int x, y;
             getyx(stdscr, y, x);
@@ -82,20 +85,174 @@ int main()
                 move(y, x - 1);
             }
         }
-        else if (c == ACS_UARROW || c == 'k')
+        else if (c == 'k')
         {
             int x, y;
             getyx(stdscr, y, x);
             if (y > 0)
             {
-                if (map[y - 1] - 1 >= x - 3)
+                if (map[y + preLine - 1] >= x - 2)
                 {
                     move(y - 1, x);
                 }
                 else
                 {
-                    move(y - 1, map[y - 1] + 2);
+                    move(y - 1, map[y + preLine - 1] + 2);
                 }
+            }
+        }
+        else if (c == 'v')
+        {
+            // VISUAL mode
+            int xStart, yStart;
+            getyx(stdscr, yStart, xStart);
+            changeMode("VISUAL");
+            move(yStart, xStart);
+            while (1)
+            {
+                int x, y;
+                c = getch();
+                if (c == 'l')
+                {
+                    getyx(stdscr, y, x);
+                    if (map[y + preLine] >= x - 1)
+                    {
+                        move(y, x + 1);
+                        getyx(stdscr, y, x);
+                        highlight(xStart, yStart, x, y);
+                    }
+                }
+                else if (c == 'j')
+                {
+                    getyx(stdscr, y, x);
+                    if (map[y + preLine + 1] != -1)
+                    {
+                        if (map[y + preLine + 1] >= x - 2)
+                        {
+                            move(y + 1, x);
+                        }
+                        else
+                        {
+                            move(y + 1, map[y + preLine + 1] + 2);
+                        }
+                        getyx(stdscr, y, x);
+                        highlight(xStart, yStart, x, y);
+                    }
+                }
+                else if (c == 'h')
+                {
+                    getyx(stdscr, y, x);
+                    if (x > 3)
+                    {
+                        move(y, x - 1);
+                        getyx(stdscr, y, x);
+                        highlight(xStart, yStart, x, y);
+                    }
+                }
+                else if (c == 'k')
+                {
+                    getyx(stdscr, y, x);
+                    if (y > 0)
+                    {
+                        if (map[y + preLine - 1] >= x - 2)
+                        {
+                            move(y - 1, x);
+                        }
+                        else
+                        {
+                            move(y - 1, map[y + preLine - 1] + 2);
+                        }
+                        getyx(stdscr, y, x);
+                        highlight(xStart, yStart, x, y);
+                    }
+                }
+                else if (c == 'c')
+                {
+                    // nothing selected
+                    if (yStart == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(xStart, yStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
+                        break;
+                    }
+
+                    // direction
+                    char direction = 'f';
+                    if (yStart > y || (yStart == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    copy(currentFileName, yStart + 1, xStart - 3, selectLength, direction);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    move(yStart, xStart);
+                    break;
+                }
+                else if (c == 'd')
+                {
+                    // nothing selected
+                    if (yStart == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(xStart, yStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
+                        break;
+                    }
+
+                    // direction
+                    char direction = 'f';
+                    if (yStart > y || (yStart == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    removeString(currentFileName, yStart + 1, xStart - 3, selectLength, direction);
+                    cat(currentFileName, stdout);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    move(yStart, xStart);
+                    break;
+                }
+                else if (c == 'x')
+                {
+                    // nothing selected
+                    if (yStart == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(xStart, yStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
+                        break;
+                    }
+
+                    // direction
+                    char direction = 'f';
+                    if (yStart > y || (yStart == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    cut(currentFileName, yStart + 1, xStart - 3, selectLength, direction);
+                    cat(currentFileName, stdout);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    move(yStart, xStart);
+                    break;
+                }
+                
             }
         }
     }
@@ -312,6 +469,15 @@ int inputAndCallCommand()
                 }
             }
         }
+    }
+    else if (strcmp(command, "open") == 0)
+    {
+        char *file = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+
+        // file name
+        open(inputPath(NULL, input, loc));
+        clearBar();
+        move(0, 3);
     }
     else if (strcmp(command, "remove") == 0)
     {
@@ -1633,11 +1799,19 @@ int cat(char *address, FILE *where)
         *(content + i) = c;
     }
     fclose(file);
+    currentFileName = address;
     if (where != stdout)
     {
         fprintf(where, "%s", content);
     }
     return 0;
+}
+
+void open(char *address)
+{
+    newFile(address);
+    cat(address, stdout);
+    openStatus = 1;
 }
 
 int removeString(char *address, int line, int pos, int length, char direction)
@@ -3086,4 +3260,82 @@ void initLine(int no)
     attron(COLOR_PAIR(LINE_NO_COLOR));
     printw(" %d ", no);
     attroff(COLOR_PAIR(LINE_NO_COLOR));
+}
+
+void highlight(int x1, int y1, int x2, int y2)
+{
+    selectLength = 0;
+    int x, y, xx, yy;
+    clearHighlight();
+    if (y2 < y1 || (y1 == y2 && x2 < x1))
+    {
+        x = x2;
+        y = y2;
+        xx = x1;
+        yy = y1;
+    }
+    else
+    {
+        x = x1;
+        y = y1;
+        xx = x2;
+        yy = y2;
+    }
+
+    init_pair(HIGHLIGHT_COLOR, 15, 12);
+    attron(COLOR_PAIR(HIGHLIGHT_COLOR));
+    char c;
+    int j = y, i = x, thisLine = 0;
+    for (;; j++)
+    {
+        if (j == yy)
+        {
+            thisLine = 1;
+        }
+        for (;; i++)
+        {
+            if (i == map[j + preLine] + 3)
+            {
+                i = 3;
+                break;
+            }
+            if (thisLine == 1 && i == xx)
+            {
+                break;
+            }
+
+            c = mvinch(j, i);
+            mvaddch(j, i, c);
+            selectLength++;
+        }
+        if (thisLine == 1)
+        {
+            break;
+        }
+    }
+
+    move(y2, x2);
+    attroff(COLOR_PAIR(HIGHLIGHT_COLOR));
+}
+
+void clearHighlight()
+{
+    char c;
+    attron(COLOR_PAIR(BG_COLOR));
+    for (int i = 0; i < LINES - 2; i++)
+    {
+        for (int j = 3; j < COLS; j++)
+        {
+            c = mvinch(i, j);
+            mvaddch(i, j, c);
+        }
+    }
+    attron(COLOR_PAIR(BG_COLOR));
+}
+
+void changeMode(char *mode)
+{
+    attron(COLOR_PAIR(MODE_COLOR) | A_BOLD);
+    mvprintw(LINES - 2, 2, "%s", mode);
+    attroff(COLOR_PAIR(MODE_COLOR) | A_BOLD);
 }
