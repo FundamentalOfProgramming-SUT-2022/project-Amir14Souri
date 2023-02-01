@@ -4,628 +4,178 @@
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
+#include <ncurses.h>
 #include "prototypes.h"
+
+WINDOW *commandBar;
+int map[100];
+
+// int pipe = 0;
 
 int main()
 {
-    inputAndCallCommand();
+    for (int i = 0; i < 100; i++)
+    {
+        map[i] = -1;
+    }
+    initscr();
+    keypad(stdscr, true);
+    cbreak();
+    noecho();
 
-    return 0;
-}
+    // setting background color
+    start_color();
+    init_pair(BG_COLOR, COLOR_WHITE, 17);
+    bkgd(COLOR_PAIR(BG_COLOR));
+    refresh();
+    initWindow(commandBar);
 
-void inputAndCallCommand()
-{
-    int pipe = 0;
-    char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+    // NORMAL mode
+
     while (1)
     {
-        if (pipe == 0)
+        char c = getch();
+        if (c == ':')
         {
-            scanf("%s", command);
+            echo();
+            move(LINES - 1, 0);
+            attron(COLOR_PAIR(BAR_COLOR));
+            addch(':');
+            if (inputAndCallCommand() == 0)
+            {
+                break;
+            }
+            attroff(COLOR_PAIR(BAR_COLOR));
+            noecho();
         }
-        char trash = 'a';
-        trash = getchar();
-
-        if (strcmp(command, "newfile") == 0)
+        else if (c == ACS_RARROW || c == 'l')
         {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            scanf("%s ", attribute);
-
-            // result
-            if (newFile(inputPath(NULL)) == 1)
+            int x, y;
+            getyx(stdscr, y, x);
+            if (map[y] >= x - 1)
             {
-                printf("This file already exists\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "insert") == 0)
-        {
-            int line, pos;
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *data = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-            getchar();
-
-            // -str attribute
-            if (pipe == 1)
-            {
-                data = readPipe();
-                pipe = 0;
-            }
-            else
-            {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
-                {
-                    if (i != 0 || end == '"')
-                    {
-                        c = getchar();
-                    }
-                    if (c == '\\')
-                    {
-                        c = getchar();
-                        switch (c)
-                        {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
-                        }
-                    }
-                    else if (c == end || c == '\n')
-                    {
-                        *(data + i) = '\0';
-                        break;
-                    }
-
-                    *(data + i) = c;
-                }
-                if (end == '"')
-                {
-                    getchar();
-                }
-            }
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                printf("Invalid position\n");
-                pipe = 0;
-                continue;
-            }
-            
-
-            // result
-            int result = insert(file, data, line, pos);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
+                move(y, x + 1);
             }
         }
-        else if (strcmp(command, "cat") == 0)
+        else if (c == ACS_DARROW || c == 'j')
         {
-            char *c = (char *)calloc(1, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(c);
-
-            // pipe possibility
-            if (*c == ' ')
+            int x, y;
+            getyx(stdscr, y, x);
+            if (map[y + 1] != -1)
             {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
+                if (map[y + 1] - 1 >= x - 3)
                 {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = cat(file, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = cat(file, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        else if (strcmp(command, "remove") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = removeString(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "copy") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = copy(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "cut") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = cut(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "paste") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // result
-            int result = paste(file, line, pos);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "find") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, at = 1;
-
-            // -str attribute
-            if (pipe == 1)
-            {
-                pipe = 0;
-                key = readPipe();
-            }
-            else
-            {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
-                {
-                    if (i != 0 || end == '"')
-                    {
-                        c = getchar();
-                    }
-                    if (c == '\\')
-                    {
-                        c = getchar();
-                        switch (c)
-                        {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
-                        case '*':
-                            *(key + i) = '\\';
-                            c = '*';
-                            i++;
-                            break;
-                        }
-                    }
-                    else if (c == end || c == '\n')
-                    {
-                        *(key + i) = '\0';
-                        break;
-                    }
-
-                    *(key + i) = c;
-                }
-                if (end == '"')
-                {
-                    getchar();
-                }
-            }
-
-            // -file attribute
-            scanf("%s ", attribute);
-            char *last = (char *)calloc(1, sizeof(char));
-            file = inputPath(last);
-            char c = *last;
-
-            // possible options (or pipe)
-            for (int i = 0; i < 5; i++)
-            {
-                if (c == ' ')
-                {
-                    scanf("%s", attribute);
-                    if (strcmp(attribute, "-count") == 0)
-                    {
-                        options += 8;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-at") == 0)
-                    {
-                        options += 4;
-                        scanf(" %d", &at);
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-byword") == 0)
-                    {
-                        options += 2;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-all") == 0)
-                    {
-                        options++;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "=D") == 0)
-                    {
-                        pipe = 1;
-                        scanf(" %s", command);
-                        break;
-                    }
+                    move(y + 1, x);
                 }
                 else
                 {
-                    break;
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = find(file, key, options, at, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = find(file, key, options, at, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid set of options!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
+                    move(y + 1, map[y + 1] + 2);
                 }
             }
         }
-        else if (strcmp(command, "replace") == 0)
+        else if (c == ACS_LARROW || c == 'h')
         {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, at = 1;
-
-            // -str1 (key) attribute
-            if (pipe == 1)
+            int x, y;
+            getyx(stdscr, y, x);
+            if (x > 3)
             {
-                pipe = 0;
-                key = readPipe();
+                move(y, x - 1);
             }
-            else
+        }
+        else if (c == ACS_UARROW || c == 'k')
+        {
+            int x, y;
+            getyx(stdscr, y, x);
+            if (y > 0)
             {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
+                if (map[y - 1] - 1 >= x - 3)
                 {
-                    if (i != 0 || end == '"')
-                    {
-                        c = getchar();
-                    }
-                    if (c == '\\')
-                    {
-                        c = getchar();
-                        switch (c)
-                        {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
-                        case '*':
-                            *(key + i) = '\\';
-                            c = '*';
-                            i++;
-                            break;
-                        }
-                    }
-                    else if (c == end || c == '\n')
-                    {
-                        *(key + i) = '\0';
-                        break;
-                    }
-
-                    *(key + i) = c;
+                    move(y - 1, x);
                 }
-                if (end == '"')
+                else
                 {
-                    getchar();
+                    move(y - 1, map[y - 1] + 2);
                 }
             }
+        }
+    }
 
-            // -str2 (alternate) attribute
-            scanf("%s ", attribute);
-            char c = getchar();
+    // getch();
+    endwin();
+    return 0;
+}
+
+int inputAndCallCommand()
+{
+    int pipe = 0;
+    int n = 0;
+    int *loc = &n;
+    char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+    char *input = (char *)calloc(500, sizeof(char));
+
+    char trash;
+    if (pipe == 0)
+    {
+        getstr(input);
+        trash = scan(command, input, loc);
+    }
+
+    if (strcmp(command, "newfile") == 0)
+    {
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        scan(attribute, input, loc);
+
+        // result
+        int result = newFile(inputPath(NULL, input, loc));
+        clearBar();
+        if (result == 1)
+        {
+            printw("This file already exists");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "insert") == 0)
+    {
+        int line, pos;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *data = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -str attribute
+        if (pipe == 1)
+        {
+            data = readPipe();
+            pipe = 0;
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
             char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
             for (int i = 0;; i++)
             {
-                if (i != 0 || end == '"')
-                {
-                    c = getchar();
-                }
+                c = *(input + *loc + i);
                 if (c == '\\')
                 {
-                    c = getchar();
+                    (*loc)++;
+                    c = *(input + *loc + i);
                     switch (c)
                     {
                     case 'n':
@@ -639,443 +189,1174 @@ void inputAndCallCommand()
                         break;
                     }
                 }
-                else if (c == end || c == '\n')
+                else if (c == end || c == '\0')
                 {
-                    *(alternate + i) = '\0';
+                    *loc += i + 1;
+                    *(data + i) = '\0';
                     break;
                 }
 
-                *(alternate + i) = c;
+                *(data + i) = c;
             }
             if (end == '"')
             {
-                getchar();
-            }
-
-            // -file attribute
-            scanf("%s ", attribute);
-            char *last = (char *)calloc(1, sizeof(char));
-            file = inputPath(last);
-            c = *last;
-
-            // possible options (or pipe)
-            for (int i = 0; i < 2; i++)
-            {
-                if (c == ' ')
-                {
-                    scanf("%s", attribute);
-                    if (strcmp(attribute, "-at") == 0)
-                    {
-                        options += 2;
-                        scanf(" %d", &at);
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-all") == 0)
-                    {
-                        options++;
-                        c = getchar();
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            // result
-            int result = replace(file, key, alternate, options, at);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid set of options!\n");
-            }
-            else if (result == 4)
-            {
-                printf("Not found!\n");
-            }
-            else
-            {
-                printf("Success\n");
+                (*loc)++;
             }
         }
-        else if (strcmp(command, "grep") == 0)
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
         {
-            char *files[50];
-            char *key = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, n = 0;
-            char c;
-
-            // -files, -str and options
-            for (int i = 0; i < 3; i++)
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "-c") == 0)
-                {
-                    options = 1;
-                }
-                else if (strcmp(attribute, "-l") == 0)
-                {
-                    options = 2;
-                }
-                else if (strcmp(attribute, "-str") == 0)
-                {
-                    if (i == 0)
-                    {
-                        i++;
-                    }
-                    c = getchar();
-                    char end = (c == '"') ? '"' : ' ';
-                    for (int i = 0;; i++)
-                    {
-                        if (i != 0 || end == '"')
-                        {
-                            c = getchar();
-                        }
-                        if (c == '\\')
-                        {
-                            c = getchar();
-                            switch (c)
-                            {
-                            case '\\':
-                                c = '\\';
-                                break;
-                            case '"':
-                                c = '\"';
-                                break;
-                            }
-                        }
-                        else if (c == end || c == '\n')
-                        {
-                            *(key + i) = '\0';
-                            break;
-                        }
-
-                        *(key + i) = c;
-                    }
-                    if (end == '"')
-                    {
-                        c = getchar();
-                    }
-                }
-                else if (strcmp(attribute, "-files") == 0)
-                {
-                    if (i == 0)
-                    {
-                        i++;
-                    }
-                    if (pipe == 1)
-                    {
-                        i++;
-                        pipe = 0;
-                        key = readPipe();
-                    }
-                    c = ' ';
-                    for (int j = 0; c != '\n'; j++)
-                    {
-                        files[n] = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-                        c = getchar();
-                        char end;
-                        if (c == '"')
-                        {
-                            end = '"';
-                        }
-                        else if (c == '=')
-                        {
-                            c = ' ';
-                            break;
-                        }
-                        else
-                        {
-                            end = ' ';
-                        }
-                        if (end == '"')
-                        {
-                            getchar();
-                        }
-                        for (int i = 0;; i++)
-                        {
-                            c = getchar();
-                            if (c == end || c == '\n')
-                            {
-                                *(files[n] + i) = '\0';
-                                break;
-                            }
-                            *(files[n] + i) = c;
-                        }
-                        if (end == '"')
-                        {
-                            c = getchar();
-                        }
-                        n++;
-                    }
-                }
-            }
-
-            // pipe possibility
-            if (c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = grep(files, n, key, options, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = grep(files, n, key, options, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Some invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("Some files doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Not found!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
+            printw("Invalid position");
+            getch();
+            clearBar();
+            move(0, 3);
+            pipe = 0;
+            return 1;
         }
-        else if (strcmp(command, "undo") == 0)
-        {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
-            scanf("%s ", attribute);
-            int result = undo(inputPath(NULL));
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("No changes has been made to this file!\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
+        // result
+        int result = insert(file, data, line, pos);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
         }
-        else if (strcmp(command, "auto-indent") == 0)
+        else if (result == 2)
         {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            scanf("%s ", attribute);
-
-            // result
-            int result = autoIndent(inputPath(NULL));
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Incorrect set of curly brackets!\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "compare") == 0)
-        {
-            char *c = (char *)calloc(1, sizeof(char));
-            char *file1 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *file2 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-
-            // -file1 attribute
-            file1 = inputPath(c);
-
-            // -file2 attribute
-            file2 = inputPath(c);
-
-            // pipe possibility
-            if (*c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = compare(file1, file2, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = compare(file1, file2, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path for 1st file\n");
-            }
-            else if (result == 2)
-            {
-                printf("1st file doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid path for 2nd file\n");
-            }
-            else if (result == 4)
-            {
-                printf("2nd file doesn't exist\n");
-            }
-            else if (result == 5)
-            {
-                printf("2 files are the same\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        else if (strcmp(command, "tree") == 0)
-        {
-            int depth;
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int history[200] = {0};
-
-            // depth
-            scanf("%d", &depth);
-            char c = getchar();
-
-            // pipe possibility
-            if (c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = tree("root", 0, depth, history, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = tree("root", 0, depth, history, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid depth!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        else if (strcmp(command, "exit") == 0)
-        {
-            FILE *clipboard = fopen("root/.clipboard.txt", "w");
-            fclose(clipboard);
-            FILE *pipe = fopen("root/.pipe.txt", "w");
-            fclose(pipe);
-            break;
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
         }
         else
         {
-            if (trash == '\n')
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "cat") == 0)
+    {
+        char *c = (char *)calloc(1, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(c, input, loc);
+
+        // pipe possibility
+        if (*c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
             {
-                printf("Invalid command\n");
-                continue;
+                pipe = 1;
+                scan(command, input, loc);
             }
+        }
+
+        // result
+        int result;
+        if (pipe == 0)
+        {
+            result = cat(file, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            result = cat(file, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            attron(COLOR_PAIR(BAR_COLOR));
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+            attron(COLOR_PAIR(BAR_COLOR));
+        }
+        if (pipe == 1 && result != 0)
+        {
+            pipe = 0;
             while (1)
             {
-                if (getchar() == '\n')
+                (*loc)++;
+                if (*(input + *loc) == '\0')
                 {
                     break;
                 }
             }
-            printf("Invalid command\n");
-            continue;
         }
     }
+    else if (strcmp(command, "remove") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid position");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid size");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = removeString(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "copy") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid position");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid size");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = copy(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "cut") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid position");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            while (1)
+            {
+                (*loc)++;
+                if (*(input + *loc) == '\0')
+                {
+                    break;
+                }
+            }
+            printw("Invalid size");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = cut(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "paste") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            printw("Invalid position");
+            getch();
+            clearBar();
+            move(0, 3);
+            return 1;
+        }
+
+        // result
+        int result = paste(file, line, pos);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "find") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, at = 1;
+
+        // -str attribute
+        if (pipe == 1)
+        {
+            pipe = 0;
+            key = readPipe();
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
+            char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+            for (int i = 0;; i++)
+            {
+                c = *(input + *loc + i);
+                if (c == '\\')
+                {
+                    (*loc)++;
+                    c = *(input + *loc + i);
+                    switch (c)
+                    {
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case '\\':
+                        c = '\\';
+                        break;
+                    case '"':
+                        c = '\"';
+                        break;
+                    case '*':
+                        *(key + i) = '\\';
+                        c = '*';
+                        i++;
+                        break;
+                    }
+                }
+                else if (c == end || c == '\0')
+                {
+                    *loc += i + 1;
+                    *(key + i) = '\0';
+                    break;
+                }
+
+                *(key + i) = c;
+            }
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+        }
+
+        // -file attribute
+        scan(attribute, input, loc);
+        char *last = (char *)calloc(1, sizeof(char));
+        file = inputPath(last, input, loc);
+        char c = *last;
+        printw("%s", attribute);
+        getch();
+
+        // possible options (or pipe)
+        for (int i = 0; i < 5; i++)
+        {
+            if (c == ' ')
+            {
+                c = scan(attribute, input, loc);
+                if (strcmp(attribute, "-count") == 0)
+                {
+                    options += 8;
+                }
+                else if (strcmp(attribute, "-at") == 0)
+                {
+                    options += 4;
+                    at = scanNumber(last, input, loc);
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-byword") == 0)
+                {
+                    options += 2;
+                }
+                else if (strcmp(attribute, "-all") == 0)
+                {
+                    options++;
+                }
+                else if (strcmp(attribute, "=D") == 0)
+                {
+                    pipe = 1;
+                    scan(command, input, loc);
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // result
+        int result;
+        if (pipe == 0)
+        {
+            result = find(file, key, options, at, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            result = find(file, key, options, at, pipe);
+            fclose(pipe);
+        }
+
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("Invalid set of options!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        if (pipe == 1 && result != 0)
+        {
+            pipe = 0;
+            while (1)
+            {
+                if (getch() == '\n')
+                {
+                    break;
+                }
+            }
+        }
+    }
+    else if (strcmp(command, "replace") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, at = 1;
+
+        // -str1 (key) attribute
+        if (pipe == 1)
+        {
+            pipe = 0;
+            key = readPipe();
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
+            char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+            for (int i = 0;; i++)
+            {
+                c = *(input + *loc + i);
+                if (c == '\\')
+                {
+                    (*loc)++;
+                    c = *(input + *loc + i);
+                    switch (c)
+                    {
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case '\\':
+                        c = '\\';
+                        break;
+                    case '"':
+                        c = '\"';
+                        break;
+                    case '*':
+                        *(key + i) = '\\';
+                        c = '*';
+                        i++;
+                        break;
+                    }
+                }
+                else if (c == end || c == '\0')
+                {
+                    *loc += i + 1;
+                    *(key + i) = '\0';
+                    break;
+                }
+
+                *(key + i) = c;
+            }
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+        }
+
+        // -str2 (alternate) attribute
+        scan(attribute, input, loc);
+        char c = *(input + *loc);
+        char end = (c == '"') ? '"' : ' ';
+        if (end == '"')
+        {
+            (*loc)++;
+        }
+        for (int i = 0;; i++)
+        {
+            c = *(input + *loc + i);
+            if (c == '\\')
+            {
+                (*loc)++;
+                c = *(input + *loc + i);
+                switch (c)
+                {
+                case 'n':
+                    c = '\n';
+                    break;
+                case '\\':
+                    c = '\\';
+                    break;
+                case '"':
+                    c = '\"';
+                    break;
+                }
+            }
+            else if (c == end || c == '\0')
+            {
+                *loc += i + 1;
+                *(alternate + i) = '\0';
+                break;
+            }
+
+            *(alternate + i) = c;
+        }
+        if (end == '"')
+        {
+            (*loc)++;
+        }
+
+        // -file attribute
+        scan(attribute, input, loc);
+        char *last = (char *)calloc(1, sizeof(char));
+        file = inputPath(last, input, loc);
+        c = *last;
+
+        // possible options (or pipe)
+        for (int i = 0; i < 2; i++)
+        {
+            if (c == ' ')
+            {
+                c = scan(attribute, input, loc);
+                if (strcmp(attribute, "-at") == 0)
+                {
+                    options += 2;
+                    at = scanNumber(last, input, loc);
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-all") == 0)
+                {
+                    options++;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // result
+        int result = replace(file, key, alternate, options, at);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("Invalid set of options!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 4)
+        {
+            printw("Not found!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "grep") == 0)
+    {
+        char *files[50];
+        char *key = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, n = 0;
+        char c;
+
+        // -files, -str and options
+        for (int i = 0; i < 3; i++)
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "-c") == 0)
+            {
+                options = 1;
+            }
+            else if (strcmp(attribute, "-l") == 0)
+            {
+                options = 2;
+            }
+            else if (strcmp(attribute, "-str") == 0)
+            {
+                if (i == 0)
+                {
+                    i++;
+                }
+                c = *(input + *loc + i);
+                char end = (c == '"') ? '"' : ' ';
+                if (end == '"')
+                {
+                    (*loc)++;
+                }
+                for (int i = 0;; i++)
+                {
+                    c = *(input + *loc + i);
+                    if (c == '\\')
+                    {
+                        (*loc)++;
+                        c = *(input + *loc + i);
+                        switch (c)
+                        {
+                        case '\\':
+                            c = '\\';
+                            break;
+                        case '"':
+                            c = '\"';
+                            break;
+                        }
+                    }
+                    else if (c == end || c == '\0')
+                    {
+                        *loc += i + 1;
+                        *(key + i) = '\0';
+                        break;
+                    }
+
+                    *(key + i) = c;
+                }
+                if (end == '"')
+                {
+                    c = *(input + *loc);
+                    (*loc)++;
+                }
+            }
+            else if (strcmp(attribute, "-files") == 0)
+            {
+                if (i == 0)
+                {
+                    i++;
+                }
+                if (pipe == 1)
+                {
+                    i++;
+                    pipe = 0;
+                    key = readPipe();
+                }
+                c = ' ';
+                for (int j = 0; c != '\0'; j++)
+                {
+                    files[n] = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+                    c = *(input + *loc);
+                    (*loc)++;
+                    char end;
+                    if (c == '"')
+                    {
+                        end = '"';
+                    }
+                    else if (c == '=')
+                    {
+                        c = ' ';
+                        break;
+                    }
+                    else
+                    {
+                        end = ' ';
+                    }
+                    if (end == '"')
+                    {
+                        (*loc)++;
+                    }
+                    for (int i = 0;; i++)
+                    {
+                        c = *(input + *loc + i);
+                        if (c == end || c == '\0')
+                        {
+                            *loc += i + 1;
+                            *(files[n] + i) = '\0';
+                            break;
+                        }
+                        *(files[n] + i) = c;
+                    }
+                    if (end == '"')
+                    {
+                        c = *(input + *loc);
+                        (*loc)++;
+                    }
+                    n++;
+                }
+            }
+        }
+
+        // pipe possibility
+        if (c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "D") == 0)
+            {
+                pipe = 1;
+                scan(command, input, loc);
+            }
+        }
+
+        // result
+        int result;
+        if (pipe == 0)
+        {
+            result = grep(files, n, key, options, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            result = grep(files, n, key, options, pipe);
+            fclose(pipe);
+        }
+
+        if (result == 1)
+        {
+            printw("Some invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("Some files doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("Not found!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        if (pipe == 1 && result != 0)
+        {
+            pipe = 0;
+            while (1)
+            {
+                if (getch() == '\n')
+                {
+                    break;
+                }
+            }
+        }
+    }
+    else if (strcmp(command, "undo") == 0)
+    {
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        scan(attribute, input, loc);
+        int result = undo(inputPath(NULL, input, loc));
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("No changes has been made to this file!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "auto-indent") == 0)
+    {
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        scan(attribute, input, loc);
+
+        // result
+        int result = autoIndent(inputPath(NULL, input, loc));
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("Incorrect set of curly brackets!");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+        else
+        {
+            printw("Success");
+            getch();
+            clearBar();
+            move(0, 3);
+        }
+    }
+    else if (strcmp(command, "compare") == 0)
+    {
+        char *c = (char *)calloc(1, sizeof(char));
+        char *file1 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *file2 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        // -file1 attribute
+        file1 = inputPath(c, input, loc);
+
+        // -file2 attribute
+        file2 = inputPath(c, input, loc);
+
+        // pipe possibility
+        if (*c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
+            {
+                pipe = 1;
+                scan(command, input, loc);
+            }
+        }
+
+        // result
+        int result;
+        if (pipe == 0)
+        {
+            result = compare(file1, file2, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            result = compare(file1, file2, pipe);
+            fclose(pipe);
+        }
+
+        if (result == 1)
+        {
+            printw("Invalid path for 1st file");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        else if (result == 2)
+        {
+            printw("1st file doesn't exist");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        else if (result == 3)
+        {
+            printw("Invalid path for 2nd file");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        else if (result == 4)
+        {
+            printw("2nd file doesn't exist");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        else if (result == 5)
+        {
+            printw("2 files are the same");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        if (pipe == 1 && result != 0)
+        {
+            pipe = 0;
+            while (1)
+            {
+                if (getch() == '\n')
+                {
+                    break;
+                }
+            }
+        }
+    }
+    else if (strcmp(command, "tree") == 0)
+    {
+        int depth;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int history[200] = {0};
+
+        // depth
+        char *last = (char *)calloc(1, sizeof(char));
+        depth = scanNumber(last, input, loc);
+        char c = *last;
+
+        // pipe possibility
+        if (c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
+            {
+                pipe = 1;
+                scan(command, input, loc);
+            }
+        }
+
+        // result
+        int result;
+        if (pipe == 0)
+        {
+            result = tree("root", 0, depth, history, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen("root/.pipe.txt", "w");
+            result = tree("root", 0, depth, history, pipe);
+            fclose(pipe);
+        }
+
+        if (result == 1)
+        {
+            printw("Invalid depth!");
+            getch();
+            clearScreen();
+            move(0, 3);
+        }
+        if (pipe == 1 && result != 0)
+        {
+            pipe = 0;
+            while (1)
+            {
+                if (getch() == '\n')
+                {
+                    break;
+                }
+            }
+        }
+    }
+    else if (strcmp(command, "exit") == 0)
+    {
+        FILE *clipboard = fopen("root/.clipboard.txt", "w");
+        fclose(clipboard);
+        FILE *pipe = fopen("root/.pipe.txt", "w");
+        fclose(pipe);
+        return 0;
+    }
+    else
+    {
+        clearBar();
+        printw("Invalid command");
+        getch();
+        clearBar();
+        move(0, 3);
+        return 1;
+    }
+
+    return 1;
 }
 
-char *inputPath(char *lastChar)
+char *inputPath(char *lastChar, char *input, int *loc)
 {
     char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-    char c = getchar();
+    char c = *(input + *loc);
+    (*loc)++;
     char end = (c == '"') ? '"' : ' ';
     if (end == '"')
     {
-        getchar();
+        (*loc)++;
     }
     for (int i = 0;; i++)
     {
-        c = getchar();
-        if (c == end || c == '\n')
+        c = *(input + *loc + i);
+        if (c == end || c == '\0')
         {
+            *loc += i + 1;
             *(file + i) = '\0';
             break;
         }
@@ -1083,7 +1364,8 @@ char *inputPath(char *lastChar)
     }
     if (end == '"')
     {
-        c = getchar();
+        c = *(input + *loc);
+        (*loc)++;
     }
     if (lastChar != NULL)
     {
@@ -1310,19 +1592,51 @@ int cat(char *address, FILE *where)
     }
 
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char c = '\n';
+    int line = 1, nChar = 0;
+    if (where == stdout)
+    {
+        clearScreen();
+        for (int i = 0; i < 100; i++)
+        {
+            map[i] = -1;
+        }
+        move(0, 0);
+    }
     for (int i = 0;; i++)
     {
-        char c = fgetc(file);
-        if (c == EOF)
+        if (c == '\n')
         {
+            initLine(line);
+        }
+        c = fgetc(file);
+        nChar++;
+        if (c == '\n')
+        {
+            map[line - 1] = nChar;
+            line++;
+            nChar = 0;
+        }
+        else if (c == EOF)
+        {
+            map[line - 1] = 1;
             *(content + i) = '\0';
             break;
         }
 
+        if (where == stdout)
+        {
+            attron(COLOR_PAIR(BG_COLOR));
+            addch(c);
+            attroff(COLOR_PAIR(BG_COLOR));
+        }
         *(content + i) = c;
     }
     fclose(file);
-    fprintf(where, "%s", content);
+    if (where != stdout)
+    {
+        fprintf(where, "%s", content);
+    }
     return 0;
 }
 
@@ -1405,7 +1719,7 @@ int copy(char *address, int line, int pos, int length, char direction)
     }
 
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-    char *target = (char *)calloc(length, sizeof(char));
+    char *target = (char *)calloc(length + 1, sizeof(char));
     int curLine = 1, curPos = 0, start = 0;
     for (int i = 0;; i++)
     {
@@ -2651,4 +2965,125 @@ char *readPipe()
     }
     fclose(pipe);
     return content;
+}
+
+void initWindow(WINDOW *bar)
+{
+    // initialize boxes
+    WINDOW *lineNo = newwin(LINES - 2, 3, 0, 0);
+    init_pair(LINE_NO_COLOR, COLOR_BLACK, 26);
+    wbkgd(lineNo, COLOR_PAIR(LINE_NO_COLOR));
+    WINDOW *mode = newwin(1, 10, LINES - 2, 0);
+    init_pair(MODE_COLOR, 15, COLOR_GREEN);
+    wbkgd(mode, COLOR_PAIR(MODE_COLOR));
+    WINDOW *fileName = newwin(1, COLS - 10, LINES - 2, 10);
+    init_pair(FILE_NAME_COLOR, COLOR_BLACK, 15);
+    wbkgd(fileName, COLOR_PAIR(FILE_NAME_COLOR));
+    WINDOW *commandBar = newwin(1, COLS, LINES - 1, 0);
+    init_pair(BAR_COLOR, COLOR_WHITE, 16);
+    wbkgd(commandBar, COLOR_PAIR(BAR_COLOR));
+    bar = commandBar;
+
+    // box texts
+    wattron(mode, A_BOLD);
+    mvwprintw(mode, 0, 2, "NORMAL");
+    wattroff(mode, A_BOLD);
+
+    wrefresh(lineNo);
+    wrefresh(mode);
+    wrefresh(fileName);
+    wrefresh(commandBar);
+    return;
+}
+
+char scan(char *text, char *input, int *loc)
+{
+    char c;
+    for (int i = 0;; i++)
+    {
+        c = *(input + *loc + i);
+        if (c == ' ' || c == '\0')
+        {
+            *loc += i + 1;
+            *(text + i) = '\0';
+            break;
+        }
+
+        *(text + i) = c;
+    }
+
+    return c;
+}
+
+int scanNumber(char *last, char *input, int *loc)
+{
+    int num = 0;
+    char c = *(input + *loc);
+    if (c == '-')
+    {
+        return -1;
+    }
+    for (int i = 0;; i++)
+    {
+        c = *(input + *loc + i);
+        if (c == ' ' || c == ':' || c == '\0')
+        {
+            *loc += i + 1;
+            if (last != NULL)
+            {
+                *last = c;
+            }
+            break;
+        }
+        num *= 10;
+        num += (c - '0');
+    }
+
+    return num;
+}
+
+void clearBar()
+{
+    attron(COLOR_PAIR(BAR_COLOR));
+    for (int i = 0; i < COLS; i++)
+    {
+        mvaddch(LINES - 1, i, ' ');
+    }
+    attron(COLOR_PAIR(BAR_COLOR));
+    move(LINES - 1, 0);
+    return;
+}
+
+void clearLine(int line)
+{
+    attron(COLOR_PAIR(LINE_NO_COLOR));
+    for (int i = 0; i < 3; i++)
+    {
+        mvaddch(line, i, ' ');
+    }
+    attroff(COLOR_PAIR(LINE_NO_COLOR));
+    attron(COLOR_PAIR(BG_COLOR));
+    for (int i = 3; i < COLS; i++)
+    {
+        mvaddch(line, i, ' ');
+    }
+    attroff(COLOR_PAIR(BG_COLOR));
+    move(0, 3);
+    return;
+}
+
+void clearScreen()
+{
+    for (int i = 0; i < LINES - 2; i++)
+    {
+        clearLine(i);
+    }
+    return;
+}
+
+void initLine(int no)
+{
+    attron(COLOR_PAIR(LINE_NO_COLOR));
+    printw(" %d ", no);
+    attroff(COLOR_PAIR(LINE_NO_COLOR));
 }
