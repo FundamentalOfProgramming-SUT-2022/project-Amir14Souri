@@ -12,8 +12,6 @@ int map[100];
 int openStatus = 0, exist = 0, preLine = 0, selectLength = 0, saved = 1;
 char *currentFileName;
 
-// int pipe = 0;
-
 int main()
 {
     currentFileName = (char *)calloc(200, sizeof(char));
@@ -409,6 +407,23 @@ int main()
                     break;
                 }
             }
+        }
+        else if (c == '=')
+        {
+            if (autoIndent(".unsaved.txt") == 3)
+            {
+                attron(COLOR_PAIR(BAR_COLOR));
+                mvprintw(LINES - 1, 0, "Invalid set of curly brackets!");
+                getch();
+                clearBar();
+                attroff(COLOR_PAIR(BAR_COLOR));
+                move(0, 4);
+                continue;
+            }
+            cat(".unsaved.txt", stdout);
+            move(0, 4);
+            saved = 0;
+            showFileStatus();
         }
     }
 
@@ -1107,6 +1122,13 @@ int inputAndCallCommand()
     }
     else if (strcmp(command, "replace") == 0)
     {
+        int thisFile = 0;
+        int interval[INPUT_MAX_CHAR][2];
+        for (int i = 0; i < INPUT_MAX_CHAR; i++)
+        {
+            interval[i][0] = -1;
+            interval[i][1] = -1;
+        }
         char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
         char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
         char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
@@ -1210,19 +1232,19 @@ int inputAndCallCommand()
             (*loc)++;
         }
 
-        // -file attribute
-        scan(attribute, input, loc);
+        // -file and possible options
         char *last = (char *)calloc(1, sizeof(char));
-        file = inputPath(last, input, loc);
-        c = *last;
-
-        // possible options (or pipe)
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 3; i++)
         {
             if (c == ' ')
             {
                 c = scan(attribute, input, loc);
-                if (strcmp(attribute, "-at") == 0)
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    file = inputPath(last, input, loc);
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-at") == 0)
                 {
                     options += 2;
                     at = scanNumber(last, input, loc);
@@ -1247,13 +1269,13 @@ int inputAndCallCommand()
             }
         }
 
-        // result
-        int interval[INPUT_MAX_CHAR][2];
-        for (int i = 0; i < INPUT_MAX_CHAR; i++)
+        if (*file == '\0')
         {
-            interval[i][0] = -1;
-            interval[i][1] = -1;
+            thisFile = 1;
+            file = ".unsaved.txt";
         }
+
+        // result
         int result = replace(file, key, alternate, options, at, interval);
         clearBar();
         if (result == 1)
@@ -1286,16 +1308,48 @@ int inputAndCallCommand()
         }
         else if (result != 5)
         {
-            printw("Success");
-            if (strcmp(file, currentFileName) == 0)
+            if (thisFile == 0)
             {
-                cat(file, stdout);
-                saved = 1;
-                showFileStatus();
+                printw("Success");
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                }
+                getch();
+                clearBar();
+                move(0, 4);
             }
-            getch();
-            clearBar();
-            move(0, 4);
+            else
+            {
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                saved = 0;
+                showFileStatus();
+                if (options == 0 || options == 1)
+                {
+                    if (interval[0][0] != -1)
+                    {
+                        int x, y;
+                        int *px = &x, *py = &y;
+                        locToLineAndPos(interval[0][0], py, px);
+                        move(y, x);
+                    }
+                }
+                else if (options == 2)
+                {
+                    if (interval[at - 1][0] != -1)
+                    {
+                        int x, y;
+                        int *px = &x, *py = &y;
+                        locToLineAndPos(interval[at - 1][0], py, px);
+                        move(y, x);
+                    }
+                }
+
+                return 1;
+            }
         }
     }
     else if (strcmp(command, "grep") == 0)
@@ -1495,6 +1549,7 @@ int inputAndCallCommand()
     }
     else if (strcmp(command, "undo") == 0)
     {
+        int thisFile = 0;
         char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
         char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
@@ -1506,13 +1561,8 @@ int inputAndCallCommand()
         }
         else if (trash == '\0')
         {
-            undo(".unsaved.txt");
-            cat(".unsaved.txt", stdout);
-            clearBar();
-            move(0, 4);
-            saved = 0;
-            showFileStatus();
-            return 1;
+            thisFile = 1;
+            file = ".unsaved.txt";
         }
 
         // result
@@ -1541,26 +1591,46 @@ int inputAndCallCommand()
         }
         else
         {
-            printw("Success");
-            if (strcmp(file, currentFileName) == 0)
+            if (thisFile == 0)
             {
-                cat(file, stdout);
-                saved = 1;
-                showFileStatus();
+                printw("Success");
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                }
+                getch();
+                clearBar();
+                move(0, 4);
             }
-            getch();
-            clearBar();
-            move(0, 4);
+            else
+            {
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                move(0, 4);
+                saved = 0;
+                showFileStatus();
+                return 1;
+            }
         }
     }
     else if (strcmp(command, "auto-indent") == 0)
     {
+        int thisFile = 0;
         char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
         char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
-        // -file attribute
-        scan(attribute, input, loc);
-        file = inputPath(NULL, input, loc);
+        if (trash == ' ')
+        {
+            scan(attribute, input, loc);
+            file = inputPath(NULL, input, loc);
+        }
+        else if (trash == '\0')
+        {
+            thisFile = 1;
+            file = ".unsaved.txt";
+        }
 
         // result
         int result = autoIndent(file);
@@ -1588,16 +1658,28 @@ int inputAndCallCommand()
         }
         else
         {
-            printw("Success");
-            if (strcmp(file, currentFileName) == 0)
+            if (thisFile == 0)
             {
-                cat(file, stdout);
-                saved = 1;
-                showFileStatus();
+                printw("Success");
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                }
+                getch();
+                clearBar();
+                move(0, 4);
             }
-            getch();
-            clearBar();
-            move(0, 4);
+            else
+            {
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                move(0, 4);
+                saved = 0;
+                showFileStatus();
+                return 1;
+            }
         }
     }
     else if (strcmp(command, "compare") == 0)
@@ -1797,6 +1879,10 @@ int inputAndCallCommand()
     }
     else if (strcmp(command, "exit") == 0)
     {
+        if (openStatus == 1 && saved == 0)
+        {
+            save();
+        }
         FILE *clipboard = fopen(".clipboard.txt", "w");
         fclose(clipboard);
         FILE *pipe = fopen(".pipe.txt", "w");
@@ -1807,6 +1893,7 @@ int inputAndCallCommand()
         fclose(backup);
         FILE *space = fopen(".space.txt", "w");
         fclose(space);
+
         return 0;
     }
     else
