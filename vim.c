@@ -20,7 +20,7 @@ int main()
         map[i] = -1;
     }
     initscr();
-    keypad(stdscr, true);
+    // keypad(stdscr, TRUE);
     cbreak();
     noecho();
 
@@ -424,6 +424,51 @@ int main()
             move(0, 4);
             saved = 0;
             showFileStatus();
+        }
+        else if (c == 'i')
+        {
+            int xStart, yStart;
+            getyx(stdscr, yStart, xStart);
+            changeMode("INSERT");
+            move(yStart, xStart);
+            while (1)
+            {
+                int x, y;
+                getyx(stdscr, y, x);
+                c = getch();
+                if ((c >= 32 && c <= 126) || c == 10)
+                {
+                    char *string = (char *)calloc(1, sizeof(char));
+                    *string = c;
+
+                    insert(".unsaved.txt", string, y + 1, x - 4);
+                    saved = 0;
+                    cat(".unsaved.txt", stdout);
+                    showFileStatus();
+                    if (c == 10)
+                    {
+                        move(y + 1, 4);
+                    }
+                    else
+                    {
+                        move(y, x + 1);
+                    }
+                }
+                else if (c == 127)
+                {
+                    removeString(".unsaved.txt", y + 1, x - 4, 1, 'b');
+                    saved = 0;
+                    cat(".unsaved.txt", stdout);
+                    showFileStatus();
+                    move(y, x - 1);
+                }
+                else if (c == 27)
+                {
+                    changeMode("NORMAL");
+                    move(y, x);
+                    break;
+                }
+            }
         }
     }
 
