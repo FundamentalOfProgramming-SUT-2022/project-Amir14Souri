@@ -10,17 +10,18 @@
 WINDOW *commandBar;
 int map[100];
 int openStatus = 0, exist = 0, preLine = 0, selectLength = 0, saved = 1;
-char *currentFileName;
+int isPipe = 0, n = 0;
+char *currentFileName, *input;
 
 int main()
 {
     currentFileName = (char *)calloc(200, sizeof(char));
+    input = (char *)calloc(500, sizeof(char));
     for (int i = 0; i < 100; i++)
     {
         map[i] = -1;
     }
     initscr();
-    // keypad(stdscr, TRUE);
     cbreak();
     noecho();
 
@@ -62,8 +63,24 @@ int main()
         {
             int x, y;
             getyx(stdscr, y, x);
-            if (map[y + preLine + 1] != -1)
+            if (map[y + preLine + 1] != -1 && y <= LINES - 4)
             {
+                if (y == LINES - 6)
+                {
+                    int nLines = 0;
+                    for (int i = 0; map[i] != -1; i++)
+                    {
+                        nLines++;
+                    }
+                    if (y + preLine + 1 != nLines - 3)
+                    {
+                        preLine++;
+                        cat(".unsaved.txt", stdout);
+                        move(y, x);
+                        continue;
+                    }
+                }
+
                 if (map[y + preLine + 1] >= x - 3)
                 {
                     move(y + 1, x);
@@ -89,6 +106,17 @@ int main()
             getyx(stdscr, y, x);
             if (y > 0)
             {
+                if (y == 3)
+                {
+                    if (preLine > 0)
+                    {
+                        preLine--;
+                        cat(".unsaved.txt", stdout);
+                        move(y, x);
+                        continue;
+                    }
+                }
+
                 if (map[y + preLine - 1] >= x - 3)
                 {
                     move(y - 1, x);
@@ -102,7 +130,7 @@ int main()
         else if (c == 'v')
         {
             // VISUAL mode
-            int xStart, yStart;
+            int xStart, yStart, firstPre = preLine;
             getyx(stdscr, yStart, xStart);
             changeMode("VISUAL");
             move(yStart, xStart);
@@ -118,14 +146,32 @@ int main()
                         move(y, x + 1);
                         getyx(stdscr, y, x);
                         clearHighlight();
-                        highlight(xStart, yStart, x, y);
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
                     }
                 }
                 else if (c == 'j')
                 {
                     getyx(stdscr, y, x);
-                    if (map[y + preLine + 1] != -1)
+                    if (map[y + preLine + 1] != -1 && y <= LINES - 4)
                     {
+                        if (y == LINES - 6)
+                        {
+                            int nLines = 0;
+                            for (int i = 0; map[i] != -1; i++)
+                            {
+                                nLines++;
+                            }
+                            if (y + preLine + 1 != nLines - 3)
+                            {
+                                preLine++;
+                                cat(".unsaved.txt", stdout);
+                                move(y, x);
+                                clearHighlight();
+                                highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                                continue;
+                            }
+                        }
+
                         if (map[y + preLine + 1] >= x - 3)
                         {
                             move(y + 1, x);
@@ -136,7 +182,7 @@ int main()
                         }
                         getyx(stdscr, y, x);
                         clearHighlight();
-                        highlight(xStart, yStart, x, y);
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
                     }
                 }
                 else if (c == 'h')
@@ -147,7 +193,7 @@ int main()
                         move(y, x - 1);
                         getyx(stdscr, y, x);
                         clearHighlight();
-                        highlight(xStart, yStart, x, y);
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
                     }
                 }
                 else if (c == 'k')
@@ -155,6 +201,20 @@ int main()
                     getyx(stdscr, y, x);
                     if (y > 0)
                     {
+                        if (y == 3)
+                        {
+                            if (preLine > 0)
+                            {
+                                preLine--;
+                                cat(".unsaved.txt", stdout);
+                                move(y, x);
+                                getyx(stdscr, y, x);
+                                clearHighlight();
+                                highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                                continue;
+                            }
+                        }
+
                         if (map[y + preLine - 1] >= x - 3)
                         {
                             move(y - 1, x);
@@ -165,32 +225,36 @@ int main()
                         }
                         getyx(stdscr, y, x);
                         clearHighlight();
-                        highlight(xStart, yStart, x, y);
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
                     }
                 }
                 else if (c == 'c')
                 {
+                    getyx(stdscr, y, x);
                     // nothing selected
-                    if (yStart == y && xStart == x)
+                    if (yStart - preLine + firstPre == y && xStart == x)
                     {
                         attron(COLOR_PAIR(BAR_COLOR));
                         move(LINES - 1, 0);
                         printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
                         getch();
                         clearBar();
                         changeMode("NORMAL");
-                        move(xStart, yStart);
+                        move(yStart - preLine + firstPre, xStart);
                         attroff(COLOR_PAIR(BAR_COLOR));
                         break;
                     }
 
                     // direction
                     char direction = 'f';
-                    if (yStart > y || (yStart == y && xStart > x))
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
                     {
                         direction = 'b';
                     }
-                    copy(".unsaved.txt", yStart + 1, xStart - 4, selectLength, direction);
+                    copy(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
                     changeMode("NORMAL");
                     clearHighlight();
                     move(y, x);
@@ -199,26 +263,29 @@ int main()
                 else if (c == 'd')
                 {
                     // nothing selected
-                    if (yStart == y && xStart == x)
+                    if (yStart - preLine + firstPre == y && xStart == x)
                     {
                         attron(COLOR_PAIR(BAR_COLOR));
                         move(LINES - 1, 0);
                         printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
                         getch();
                         clearBar();
                         changeMode("NORMAL");
-                        move(xStart, yStart);
+                        move(yStart - preLine + firstPre, xStart);
                         attroff(COLOR_PAIR(BAR_COLOR));
                         break;
                     }
 
                     // direction
                     char direction = 'f';
-                    if (yStart > y || (yStart == y && xStart > x))
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
                     {
                         direction = 'b';
                     }
-                    removeString(".unsaved.txt", yStart + 1, xStart - 4, selectLength, direction);
+                    removeString(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
                     cat(".unsaved.txt", stdout);
                     changeMode("NORMAL");
                     clearHighlight();
@@ -227,7 +294,7 @@ int main()
                     if (direction == 'f')
                     {
                         x = xStart;
-                        y = yStart;
+                        y = yStart - preLine + firstPre;
                     }
                     move(y, x);
                     break;
@@ -235,26 +302,29 @@ int main()
                 else if (c == 'x')
                 {
                     // nothing selected
-                    if (yStart == y && xStart == x)
+                    if (yStart - preLine + firstPre == y && xStart == x)
                     {
                         attron(COLOR_PAIR(BAR_COLOR));
                         move(LINES - 1, 0);
                         printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
                         getch();
                         clearBar();
                         changeMode("NORMAL");
-                        move(xStart, yStart);
+                        move(yStart - preLine + firstPre, xStart);
                         attroff(COLOR_PAIR(BAR_COLOR));
                         break;
                     }
 
                     // direction
                     char direction = 'f';
-                    if (yStart > y || (yStart == y && xStart > x))
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
                     {
                         direction = 'b';
                     }
-                    cut(".unsaved.txt", yStart + 1, xStart - 4, selectLength, direction);
+                    cut(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
                     cat(".unsaved.txt", stdout);
                     changeMode("NORMAL");
                     clearHighlight();
@@ -263,16 +333,16 @@ int main()
                     if (direction == 'f')
                     {
                         x = xStart;
-                        y = yStart;
+                        y = yStart - preLine + firstPre;
                     }
                     move(y, x);
                     break;
                 }
-                else if (c == 'n')
+                else if (c == 27)
                 {
                     changeMode("NORMAL");
                     clearHighlight();
-                    move(yStart, xStart);
+                    move(yStart - preLine + firstPre, xStart);
                     break;
                 }
             }
@@ -281,7 +351,7 @@ int main()
         {
             int x, y;
             getyx(stdscr, y, x);
-            paste(".unsaved.txt", y + 1, x - 4);
+            paste(".unsaved.txt", y + preLine + 1, x - 4);
             cat(".unsaved.txt", stdout);
             saved = 0;
             showFileStatus();
@@ -289,11 +359,13 @@ int main()
         }
         else if (c == 'u')
         {
+            int x, y;
+            getyx(stdscr, y, x);
             undo(".unsaved.txt");
             cat(".unsaved.txt", stdout);
-            move(0, 4);
             saved = 0;
             showFileStatus();
+            move(y, x);
         }
         else if (c == '/')
         {
@@ -360,9 +432,7 @@ int main()
                 int *px1 = &x1, *py1 = &y1, *px2 = &x2, *py2 = &y2;
                 locToLineAndPos(interval[i][0], py1, px1);
                 locToLineAndPos(interval[i][1] + 1, py2, px2);
-                // mvprintw(12, 12, "%d %d %d %d", y1, x1, y2, x2);
-                // getch();
-                highlight(x1, y1, x2, y2);
+                highlight(x1, y1, x2, y2, HIGHLIGHT_FIND_COLOR);
             }
             move(y, x);
             attroff(COLOR_PAIR(BAR_COLOR));
@@ -410,20 +480,25 @@ int main()
         }
         else if (c == '=')
         {
+            int x, y;
+            getyx(stdscr, y, x);
             if (autoIndent(".unsaved.txt") == 3)
             {
                 attron(COLOR_PAIR(BAR_COLOR));
                 mvprintw(LINES - 1, 0, "Invalid set of curly brackets!");
+                int xx, yy;
+                getyx(stdscr, yy, xx);
+                pressEnter(yy, xx);
                 getch();
                 clearBar();
                 attroff(COLOR_PAIR(BAR_COLOR));
-                move(0, 4);
+                move(y, x);
                 continue;
             }
             cat(".unsaved.txt", stdout);
-            move(0, 4);
             saved = 0;
             showFileStatus();
+            move(y, x);
         }
         else if (c == 'i')
         {
@@ -441,13 +516,22 @@ int main()
                     char *string = (char *)calloc(1, sizeof(char));
                     *string = c;
 
-                    insert(".unsaved.txt", string, y + 1, x - 4);
+                    insert(".unsaved.txt", string, y + preLine + 1, x - 4);
                     saved = 0;
                     cat(".unsaved.txt", stdout);
                     showFileStatus();
                     if (c == 10)
                     {
-                        move(y + 1, 4);
+                        if (y == LINES - 3)
+                        {
+                            preLine++;
+                            cat(".unsaved.txt", stdout);
+                            move(y, 4);
+                        }
+                        else
+                        {
+                            move(y + 1, 4);
+                        }
                     }
                     else
                     {
@@ -456,11 +540,27 @@ int main()
                 }
                 else if (c == 127)
                 {
-                    removeString(".unsaved.txt", y + 1, x - 4, 1, 'b');
+                    removeString(".unsaved.txt", y + preLine + 1, x - 4, 1, 'b');
                     saved = 0;
                     cat(".unsaved.txt", stdout);
                     showFileStatus();
-                    move(y, x - 1);
+                    if (x == 4)
+                    {
+                        if (y > 0)
+                        {
+                            move(y - 1, map[y + preLine - 1] + 3);
+                        }
+                        else if (y == 0 && preLine > 0)
+                        {
+                            preLine--;
+                            cat(".unsaved.txt", stdout);
+                            move(y, map[y + preLine] + 3);
+                        }
+                    }
+                    else
+                    {
+                        move(y, x - 1);
+                    }
                 }
                 else if (c == 27)
                 {
@@ -472,25 +572,22 @@ int main()
         }
     }
 
-    // getch();
     endwin();
     return 0;
 }
 
 int inputAndCallCommand()
 {
-    int pipe = 0;
-    int n = 0;
     int *loc = &n;
     char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-    char *input = (char *)calloc(500, sizeof(char));
 
     char trash;
-    if (pipe == 0)
+    if (isPipe == 0)
     {
+        n = 0;
         getstr(input);
-        trash = scan(command, input, loc);
     }
+    trash = scan(command, input, loc);
 
     if (strcmp(command, "newfile") == 0)
     {
@@ -507,6 +604,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("This file already exists");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -514,6 +614,9 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -531,10 +634,10 @@ int inputAndCallCommand()
         file = inputPath(NULL, input, loc);
 
         // -str attribute
-        if (pipe == 1)
+        if (isPipe == 1)
         {
             data = readPipe();
-            pipe = 0;
+            isPipe = 0;
         }
         else
         {
@@ -588,10 +691,13 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
-            pipe = 0;
+            isPipe = 0;
             return 1;
         }
 
@@ -601,6 +707,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -608,6 +717,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -615,11 +727,16 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             if (strcmp(file, currentFileName) == 0)
             {
+                preLine = 0;
                 cat(file, stdout);
                 saved = 1;
                 showFileStatus();
+                move(LINES - 1, 7);
             }
             getch();
             clearBar();
@@ -642,15 +759,15 @@ int inputAndCallCommand()
             scan(attribute, input, loc);
             if (strcmp(attribute, "=D") == 0)
             {
-                pipe = 1;
-                scan(command, input, loc);
+                isPipe = 1;
             }
         }
 
         // result
         int result;
-        if (pipe == 0)
+        if (isPipe == 0)
         {
+            preLine = 0;
             result = cat(file, stdout);
         }
         else
@@ -662,19 +779,27 @@ int inputAndCallCommand()
         clearBar();
         if (result == 1)
         {
+            isPipe = 0;
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 2)
         {
+            isPipe = 0;
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
-        else
+        else if (isPipe == 0)
         {
             if (openStatus == 1)
             {
@@ -688,17 +813,9 @@ int inputAndCallCommand()
             saved = 0;
             showFileStatus();
         }
-        if (pipe == 1 && result != 0)
+        if (isPipe == 1)
         {
-            pipe = 0;
-            while (1)
-            {
-                (*loc)++;
-                if (*(input + *loc) == '\0')
-                {
-                    break;
-                }
-            }
+            inputAndCallCommand();
         }
     }
     else if (strcmp(command, "open") == 0)
@@ -706,6 +823,7 @@ int inputAndCallCommand()
         char *file = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
 
         // file name
+        preLine = 0;
         open(inputPath(NULL, input, loc));
         clearBar();
         move(0, 4);
@@ -733,6 +851,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -746,6 +867,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -762,6 +886,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -769,6 +896,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -776,11 +906,16 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             if (strcmp(file, currentFileName) == 0)
             {
+                preLine = 0;
                 cat(file, stdout);
                 saved = 1;
                 showFileStatus();
+                move(LINES - 1, 7);
             }
             getch();
             clearBar();
@@ -806,6 +941,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -819,6 +957,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -835,6 +976,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -842,6 +986,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -849,6 +996,9 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -873,6 +1023,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -886,6 +1039,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -902,6 +1058,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -909,6 +1068,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -916,11 +1078,16 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             if (strcmp(file, currentFileName) == 0)
             {
+                preLine = 0;
                 cat(file, stdout);
                 saved = 1;
                 showFileStatus();
+                move(LINES - 1, 7);
             }
             getch();
             clearBar();
@@ -945,6 +1112,9 @@ int inputAndCallCommand()
         {
             clearBar();
             printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -957,6 +1127,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -964,6 +1137,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -971,11 +1147,16 @@ int inputAndCallCommand()
         else
         {
             printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             if (strcmp(file, currentFileName) == 0)
             {
+                preLine = 0;
                 cat(file, stdout);
                 saved = 1;
                 showFileStatus();
+                move(LINES - 1, 7);
             }
             getch();
             clearBar();
@@ -990,9 +1171,9 @@ int inputAndCallCommand()
         int options = 0, at = 1;
 
         // -str attribute
-        if (pipe == 1)
+        if (isPipe == 1)
         {
-            pipe = 0;
+            isPipe = 0;
             key = readPipe();
         }
         else
@@ -1068,6 +1249,9 @@ int inputAndCallCommand()
                     {
                         clearBar();
                         printw("Invalid number for -at attribute");
+                        int x, y;
+                        getyx(stdscr, y, x);
+                        pressEnter(y, x);
                         getch();
                         clearBar();
                         move(0, 4);
@@ -1084,8 +1268,7 @@ int inputAndCallCommand()
                 }
                 else if (strcmp(attribute, "=D") == 0)
                 {
-                    pipe = 1;
-                    scan(command, input, loc);
+                    isPipe = 1;
                     break;
                 }
             }
@@ -1097,7 +1280,7 @@ int inputAndCallCommand()
 
         // result
         int result;
-        if (pipe == 0)
+        if (isPipe == 0)
         {
             FILE *space = fopen(".space.txt", "w");
             result = find(file, key, options, at, space);
@@ -1112,38 +1295,55 @@ int inputAndCallCommand()
         clearBar();
         if (result == 1)
         {
+            isPipe = 0;
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 2)
         {
+            isPipe = 0;
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 3)
         {
+            isPipe = 0;
             printw("Invalid set of options!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 4)
         {
+            isPipe = 0;
             printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
-        else
+        else if (isPipe == 0)
         {
             if (openStatus == 1)
             {
                 save();
             }
+            preLine = 0;
             cat(".space.txt", stdout);
             *currentFileName = '\0';
             clearBar();
@@ -1153,16 +1353,9 @@ int inputAndCallCommand()
             saved = 0;
             showFileStatus();
         }
-        if (pipe == 1 && result != 0)
+        if (isPipe == 1)
         {
-            pipe = 0;
-            while (1)
-            {
-                if (getch() == '\n')
-                {
-                    break;
-                }
-            }
+            inputAndCallCommand();
         }
     }
     else if (strcmp(command, "replace") == 0)
@@ -1181,9 +1374,9 @@ int inputAndCallCommand()
         int options = 0, at = 1;
 
         // -str1 (key) attribute
-        if (pipe == 1)
+        if (isPipe == 1)
         {
-            pipe = 0;
+            isPipe = 0;
             key = readPipe();
         }
         else
@@ -1297,6 +1490,9 @@ int inputAndCallCommand()
                     {
                         clearBar();
                         printw("Invalid number for -at attribute");
+                        int x, y;
+                        getyx(stdscr, y, x);
+                        pressEnter(y, x);
                         getch();
                         clearBar();
                         move(0, 4);
@@ -1326,6 +1522,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1333,6 +1532,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1340,6 +1542,9 @@ int inputAndCallCommand()
         else if (result == 3)
         {
             printw("Invalid set of options!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1347,6 +1552,9 @@ int inputAndCallCommand()
         else if (result == 4)
         {
             printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1356,11 +1564,16 @@ int inputAndCallCommand()
             if (thisFile == 0)
             {
                 printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
                 if (strcmp(file, currentFileName) == 0)
                 {
+                    preLine = 0;
                     cat(file, stdout);
                     saved = 1;
                     showFileStatus();
+                    move(LINES - 1, 7);
                 }
                 getch();
                 clearBar();
@@ -1368,6 +1581,7 @@ int inputAndCallCommand()
             }
             else
             {
+                preLine = 0;
                 cat(".unsaved.txt", stdout);
                 clearBar();
                 saved = 0;
@@ -1467,10 +1681,10 @@ int inputAndCallCommand()
                 {
                     i++;
                 }
-                if (pipe == 1)
+                if (isPipe == 1)
                 {
                     i++;
-                    pipe = 0;
+                    isPipe = 0;
                     key = readPipe();
                 }
                 c = ' ';
@@ -1524,14 +1738,13 @@ int inputAndCallCommand()
             scan(attribute, input, loc);
             if (strcmp(attribute, "D") == 0)
             {
-                pipe = 1;
-                scan(command, input, loc);
+                isPipe = 1;
             }
         }
 
         // result
         int result;
-        if (pipe == 0)
+        if (isPipe == 0)
         {
             FILE *space = fopen(".space.txt", "w");
             result = grep(files, n, key, options, space);
@@ -1546,31 +1759,44 @@ int inputAndCallCommand()
         clearBar();
         if (result == 1)
         {
+            isPipe = 0;
             printw("Some invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 2)
         {
+            isPipe = 0;
             printw("Some files doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
         else if (result == 3)
         {
+            isPipe = 0;
             printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
         }
-        else
+        else if (isPipe == 0)
         {
             if (openStatus == 1)
             {
                 save();
             }
+            preLine = 0;
             cat(".space.txt", stdout);
             *currentFileName = '\0';
             clearBar();
@@ -1580,16 +1806,9 @@ int inputAndCallCommand()
             saved = 0;
             showFileStatus();
         }
-        if (pipe == 1 && result != 0)
+        if (isPipe == 1)
         {
-            pipe = 0;
-            while (1)
-            {
-                if (getch() == '\n')
-                {
-                    break;
-                }
-            }
+            inputAndCallCommand();
         }
     }
     else if (strcmp(command, "undo") == 0)
@@ -1616,6 +1835,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1623,6 +1845,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1630,6 +1855,9 @@ int inputAndCallCommand()
         else if (result == 3)
         {
             printw("No changes has been made to this file!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1639,11 +1867,16 @@ int inputAndCallCommand()
             if (thisFile == 0)
             {
                 printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
                 if (strcmp(file, currentFileName) == 0)
                 {
+                    preLine = 0;
                     cat(file, stdout);
                     saved = 1;
                     showFileStatus();
+                    move(LINES - 1, 7);
                 }
                 getch();
                 clearBar();
@@ -1651,6 +1884,7 @@ int inputAndCallCommand()
             }
             else
             {
+                preLine = 0;
                 cat(".unsaved.txt", stdout);
                 clearBar();
                 move(0, 4);
@@ -1683,6 +1917,9 @@ int inputAndCallCommand()
         if (result == 1)
         {
             printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1690,6 +1927,9 @@ int inputAndCallCommand()
         else if (result == 2)
         {
             printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1697,6 +1937,9 @@ int inputAndCallCommand()
         else if (result == 3)
         {
             printw("Incorrect set of curly brackets!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearBar();
             move(0, 4);
@@ -1706,11 +1949,16 @@ int inputAndCallCommand()
             if (thisFile == 0)
             {
                 printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
                 if (strcmp(file, currentFileName) == 0)
                 {
+                    preLine = 0;
                     cat(file, stdout);
                     saved = 1;
                     showFileStatus();
+                    move(LINES - 1, 7);
                 }
                 getch();
                 clearBar();
@@ -1718,6 +1966,7 @@ int inputAndCallCommand()
             }
             else
             {
+                preLine = 0;
                 cat(".unsaved.txt", stdout);
                 clearBar();
                 move(0, 4);
@@ -1746,14 +1995,13 @@ int inputAndCallCommand()
             scan(attribute, input, loc);
             if (strcmp(attribute, "=D") == 0)
             {
-                pipe = 1;
-                scan(command, input, loc);
+                isPipe = 1;
             }
         }
 
         // result
         int result;
-        if (pipe == 0)
+        if (isPipe == 0)
         {
             FILE *space = fopen(".space.txt", "w");
             result = compare(file1, file2, space);
@@ -1768,45 +2016,66 @@ int inputAndCallCommand()
         clearBar();
         if (result == 1)
         {
+            isPipe = 0;
             printw("Invalid path for 1st file");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
         else if (result == 2)
         {
+            isPipe = 0;
             printw("1st file doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
         else if (result == 3)
         {
+            isPipe = 0;
             printw("Invalid path for 2nd file");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
         else if (result == 4)
         {
+            isPipe = 0;
             printw("2nd file doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
         else if (result == 5)
         {
+            isPipe = 0;
             printw("2 files are the same");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
-        else
+        else if (isPipe == 0)
         {
             if (openStatus == 1)
             {
                 save();
             }
+            preLine = 0;
             cat(".space.txt", stdout);
             *currentFileName = '\0';
             clearBar();
@@ -1816,16 +2085,9 @@ int inputAndCallCommand()
             saved = 0;
             showFileStatus();
         }
-        if (pipe == 1 && result != 0)
+        if (isPipe == 1)
         {
-            pipe = 0;
-            while (1)
-            {
-                if (getch() == '\n')
-                {
-                    break;
-                }
-            }
+            inputAndCallCommand();
         }
     }
     else if (strcmp(command, "tree") == 0)
@@ -1845,14 +2107,13 @@ int inputAndCallCommand()
             scan(attribute, input, loc);
             if (strcmp(attribute, "=D") == 0)
             {
-                pipe = 1;
-                scan(command, input, loc);
+                isPipe = 1;
             }
         }
 
         // result
         int result;
-        if (pipe == 0)
+        if (isPipe == 0)
         {
             FILE *space = fopen(".space.txt", "w");
             result = tree("root", 0, depth, history, space);
@@ -1864,20 +2125,24 @@ int inputAndCallCommand()
             result = tree("root", 0, depth, history, pipe);
             fclose(pipe);
         }
-
+        clearBar();
         if (result == 1)
         {
             printw("Invalid depth!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
             getch();
             clearScreen();
             move(0, 4);
         }
-        else
+        else if (isPipe == 0)
         {
             if (openStatus == 1)
             {
                 save();
             }
+            preLine = 0;
             cat(".space.txt", stdout);
             *currentFileName = '\0';
             clearBar();
@@ -1887,16 +2152,9 @@ int inputAndCallCommand()
             saved = 0;
             showFileStatus();
         }
-        if (pipe == 1 && result != 0)
+        if (isPipe == 1)
         {
-            pipe = 0;
-            while (1)
-            {
-                if (getch() == '\n')
-                {
-                    break;
-                }
-            }
+            inputAndCallCommand();
         }
     }
     else if (strcmp(command, "save") == 0)
@@ -1904,6 +2162,9 @@ int inputAndCallCommand()
         save();
         clearBar();
         printw("Success");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
         getch();
         clearBar();
         move(0, 4);
@@ -1918,6 +2179,9 @@ int inputAndCallCommand()
         saveAs(file);
         clearBar();
         printw("Success");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
         getch();
         clearBar();
         move(0, 4);
@@ -1945,6 +2209,9 @@ int inputAndCallCommand()
     {
         clearBar();
         printw("Invalid command");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
         getch();
         clearBar();
         move(0, 4);
@@ -2221,12 +2488,20 @@ int cat(char *address, FILE *where)
     }
     for (int i = 0;; i++)
     {
-        if (c == '\n' && where == stdout)
+        if (c == '\n' && where == stdout && line > preLine && line - preLine <= LINES - 2)
         {
             initLine(line);
         }
         c = fgetc(file);
         nChar++;
+
+        if (where == stdout && line > preLine && line - preLine <= LINES - 2)
+        {
+            attron(COLOR_PAIR(BG_COLOR));
+            addch(c);
+            attroff(COLOR_PAIR(BG_COLOR));
+        }
+
         if (c == '\n' && where == stdout)
         {
             map[line - 1] = nChar;
@@ -2237,17 +2512,16 @@ int cat(char *address, FILE *where)
         {
             if (where == stdout)
             {
+                if (line > preLine && line - preLine <= LINES - 2)
+                {
+                    attron(COLOR_PAIR(BG_COLOR));
+                    mvaddch(line - preLine - 1, 4, ' ');
+                    attroff(COLOR_PAIR(BG_COLOR));
+                }
                 map[line - 1] = 1;
             }
             *(content + i) = '\0';
             break;
-        }
-
-        if (where == stdout)
-        {
-            attron(COLOR_PAIR(BG_COLOR));
-            addch(c);
-            attroff(COLOR_PAIR(BG_COLOR));
         }
         *(content + i) = c;
     }
@@ -3641,20 +3915,25 @@ void initWindow(WINDOW *bar)
     init_pair(LINE_NO_COLOR, COLOR_BLACK, 26);
     wbkgd(lineNo, COLOR_PAIR(LINE_NO_COLOR));
     WINDOW *mode = newwin(1, 10, LINES - 2, 0);
-    init_pair(MODE_COLOR, 15, COLOR_GREEN);
-    wbkgd(mode, COLOR_PAIR(MODE_COLOR));
+    init_pair(MODE_NORMAL_COLOR, 15, COLOR_GREEN);
+    init_pair(MODE_VISUAL_COLOR, 15, COLOR_RED);
+    init_pair(MODE_INSERT_COLOR, 15, COLOR_MAGENTA);
+    wbkgd(mode, COLOR_PAIR(MODE_NORMAL_COLOR));
     WINDOW *fileName = newwin(1, COLS - 10, LINES - 2, 10);
     init_pair(FILE_NAME_COLOR, COLOR_BLACK, 15);
     wbkgd(fileName, COLOR_PAIR(FILE_NAME_COLOR));
     WINDOW *commandBar = newwin(1, COLS, LINES - 1, 0);
+    init_pair(ENTER_COLOR, 33, 16);
     init_pair(BAR_COLOR, COLOR_WHITE, 16);
     wbkgd(commandBar, COLOR_PAIR(BAR_COLOR));
     bar = commandBar;
 
     // box texts
-    wattron(mode, A_BOLD);
-    mvwprintw(mode, 0, 2, "NORMAL");
-    wattroff(mode, A_BOLD);
+    changeMode("NORMAL");
+    move(0, 4);
+
+    init_pair(HIGHLIGHT_VISUAL_COLOR, 15, 12);
+    init_pair(HIGHLIGHT_FIND_COLOR, 15, 201);
 
     wrefresh(lineNo);
     wrefresh(mode);
@@ -3684,11 +3963,12 @@ char scan(char *text, char *input, int *loc)
 
 int scanNumber(char *last, char *input, int *loc)
 {
-    int num = 0;
+    int num = 0, sign = 1;
     char c = *(input + *loc);
     if (c == '-')
     {
-        return -1;
+        sign = -1;
+        (*loc)++;
     }
     for (int i = 0;; i++)
     {
@@ -3706,7 +3986,7 @@ int scanNumber(char *last, char *input, int *loc)
         num += (c - '0');
     }
 
-    return num;
+    return sign * num;
 }
 
 void clearBar()
@@ -3766,7 +4046,7 @@ void initLine(int no)
     attroff(COLOR_PAIR(LINE_NO_COLOR));
 }
 
-void highlight(int x1, int y1, int x2, int y2)
+void highlight(int x1, int y1, int x2, int y2, int color)
 {
     selectLength = 0;
     int x, y, xx, yy;
@@ -3785,8 +4065,7 @@ void highlight(int x1, int y1, int x2, int y2)
         yy = y2;
     }
 
-    init_pair(HIGHLIGHT_COLOR, 15, 12);
-    attron(COLOR_PAIR(HIGHLIGHT_COLOR));
+    attron(COLOR_PAIR(color));
     char c;
     int j = y, i = x, thisLine = 0;
     for (;; j++)
@@ -3818,7 +4097,7 @@ void highlight(int x1, int y1, int x2, int y2)
     }
 
     move(y2, x2);
-    attroff(COLOR_PAIR(HIGHLIGHT_COLOR));
+    attroff(COLOR_PAIR(color));
 }
 
 void clearHighlight()
@@ -3838,9 +4117,35 @@ void clearHighlight()
 
 void changeMode(char *mode)
 {
-    attron(COLOR_PAIR(MODE_COLOR) | A_BOLD);
+    if (strcmp(mode, "NORMAL") == 0)
+    {
+        attron(COLOR_PAIR(MODE_NORMAL_COLOR));
+    }
+    else if (strcmp(mode, "VISUAL") == 0)
+    {
+        attron(COLOR_PAIR(MODE_VISUAL_COLOR));
+    }
+    else if (strcmp(mode, "INSERT") == 0)
+    {
+        attron(COLOR_PAIR(MODE_INSERT_COLOR));
+    }
+    attron(A_BOLD);
+
     mvprintw(LINES - 2, 0, "  %s  ", mode);
-    attroff(COLOR_PAIR(MODE_COLOR) | A_BOLD);
+
+    if (strcmp(mode, "NORMAL") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_NORMAL_COLOR));
+    }
+    else if (strcmp(mode, "VISUAL") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_VISUAL_COLOR));
+    }
+    else if (strcmp(mode, "INSERT") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_INSERT_COLOR));
+    }
+    attroff(A_BOLD);
 }
 
 void save()
@@ -3852,10 +4157,18 @@ void save()
         char *input = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
         clearBar();
         attron(COLOR_PAIR(BAR_COLOR));
-        mvprintw(LINES - 1, 0, ":");
-        getstr(input);
-        currentFileName = inputPath(NULL, input, loc);
+        mvprintw(LINES - 1, 0, "Enter a path for your file");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
+        getch();
+        clearBar();
         attroff(COLOR_PAIR(BAR_COLOR));
+        move(LINES - 2, 12);
+        attron(COLOR_PAIR(FILE_NAME_COLOR));
+        getstr(input);
+        attroff(COLOR_PAIR(FILE_NAME_COLOR));
+        currentFileName = inputPath(NULL, input, loc);
     }
 
     newFile(currentFileName);
@@ -3905,11 +4218,19 @@ void locToLineAndPos(int loc, int *y, int *x)
         sum += map[i];
         if (loc < sum)
         {
-            *y = i;
+            *y = i - preLine;
             *x = loc - last + 4;
             break;
         }
         last += map[i];
     }
     return;
+}
+
+void pressEnter(int y, int x)
+{
+    attron(COLOR_PAIR(ENTER_COLOR));
+    mvprintw(LINES - 1, COLS - 13, "Press ENTER");
+    attroff(COLOR_PAIR(ENTER_COLOR));
+    move(y, x);
 }

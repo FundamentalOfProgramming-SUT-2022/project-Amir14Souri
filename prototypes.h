@@ -3,10 +3,14 @@
 #define ATTR_MAX_CHAR 15
 #define BG_COLOR 1
 #define BAR_COLOR 2
-#define MODE_COLOR 3
-#define FILE_NAME_COLOR 4
-#define LINE_NO_COLOR 5
-#define HIGHLIGHT_COLOR 6
+#define MODE_NORMAL_COLOR 3
+#define MODE_VISUAL_COLOR 4
+#define MODE_INSERT_COLOR 5
+#define FILE_NAME_COLOR 6
+#define LINE_NO_COLOR 7
+#define HIGHLIGHT_VISUAL_COLOR 8
+#define HIGHLIGHT_FIND_COLOR 9
+#define ENTER_COLOR 10
 
 int inputAndCallCommand();
 char *inputPath(char *lastChar, char *input, int *loc);
@@ -40,10 +44,11 @@ void clearName();
 void clearLine(int line);
 void clearScreen();
 void initLine(int no);
-void highlight(int x1, int y1, int x2, int y2);
+void highlight(int x1, int y1, int x2, int y2, int color);
 void clearHighlight();
 void changeMode(char *mode);
 void save();
 void saveAs(char *address);
 void showFileStatus();
 void locToLineAndPos(int loc, int *y, int *x);
+void pressEnter(int y, int x);
