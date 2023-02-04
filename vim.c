@@ -4,628 +4,657 @@
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
+#include <ncurses.h>
 #include "prototypes.h"
+
+WINDOW *commandBar;
+int map[100];
+int openStatus = 0, exist = 0, preLine = 0, selectLength = 0, saved = 1;
+int isPipe = 0, n = 0;
+char *currentFileName, *input;
 
 int main()
 {
-    inputAndCallCommand();
+    currentFileName = (char *)calloc(200, sizeof(char));
+    input = (char *)calloc(500, sizeof(char));
+    for (int i = 0; i < 100; i++)
+    {
+        map[i] = -1;
+    }
+    initscr();
+    cbreak();
+    noecho();
 
-    return 0;
-}
+    // setting background color
+    start_color();
+    init_pair(BG_COLOR, 15, 17);
+    bkgd(COLOR_PAIR(BG_COLOR));
+    refresh();
+    initWindow(commandBar);
 
-void inputAndCallCommand()
-{
-    int pipe = 0;
-    char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+    // NORMAL mode
+
     while (1)
     {
-        if (pipe == 0)
+        char c = getch();
+        if (c == ':')
         {
-            scanf("%s", command);
+            echo();
+            move(LINES - 1, 0);
+            attron(COLOR_PAIR(BAR_COLOR));
+            addch(':');
+            if (inputAndCallCommand() == 0)
+            {
+                break;
+            }
+            attroff(COLOR_PAIR(BAR_COLOR));
+            noecho();
         }
-        char trash = 'a';
-        trash = getchar();
-
-        if (strcmp(command, "newfile") == 0)
+        else if (c == 'l')
         {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            scanf("%s ", attribute);
-
-            // result
-            if (newFile(inputPath(NULL)) == 1)
+            int x, y;
+            getyx(stdscr, y, x);
+            if (map[y + preLine] >= x - 2 && x > 3)
             {
-                printf("This file already exists\n");
-            }
-            else
-            {
-                printf("Success\n");
+                move(y, x + 1);
             }
         }
-        else if (strcmp(command, "insert") == 0)
+        else if (c == 'j')
         {
-            int line, pos;
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *data = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-            getchar();
-
-            // -str attribute
-            if (pipe == 1)
+            int x, y;
+            getyx(stdscr, y, x);
+            if (map[y + preLine + 1] != -1 && y <= LINES - 4)
             {
-                data = readPipe();
-                pipe = 0;
-            }
-            else
-            {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
+                if (y == LINES - 6)
                 {
-                    if (i != 0 || end == '"')
+                    int nLines = 0;
+                    for (int i = 0; map[i] != -1; i++)
                     {
-                        c = getchar();
+                        nLines++;
                     }
-                    if (c == '\\')
+                    if (y + preLine + 1 != nLines - 3)
                     {
-                        c = getchar();
-                        switch (c)
+                        preLine++;
+                        cat(".unsaved.txt", stdout);
+                        move(y, x);
+                        continue;
+                    }
+                }
+
+                if (map[y + preLine + 1] >= x - 3)
+                {
+                    move(y + 1, x);
+                }
+                else
+                {
+                    move(y + 1, map[y + preLine + 1] + 3);
+                }
+            }
+        }
+        else if (c == 'h')
+        {
+            int x, y;
+            getyx(stdscr, y, x);
+            if (x > 4)
+            {
+                move(y, x - 1);
+            }
+        }
+        else if (c == 'k')
+        {
+            int x, y;
+            getyx(stdscr, y, x);
+            if (y > 0)
+            {
+                if (y == 3)
+                {
+                    if (preLine > 0)
+                    {
+                        preLine--;
+                        cat(".unsaved.txt", stdout);
+                        move(y, x);
+                        continue;
+                    }
+                }
+
+                if (map[y + preLine - 1] >= x - 3)
+                {
+                    move(y - 1, x);
+                }
+                else
+                {
+                    move(y - 1, map[y + preLine - 1] + 3);
+                }
+            }
+        }
+        else if (c == 'v')
+        {
+            // VISUAL mode
+            int xStart, yStart, firstPre = preLine;
+            getyx(stdscr, yStart, xStart);
+            changeMode("VISUAL");
+            move(yStart, xStart);
+            while (1)
+            {
+                int x, y;
+                c = getch();
+                if (c == 'l')
+                {
+                    getyx(stdscr, y, x);
+                    if (map[y + preLine] >= x - 2)
+                    {
+                        move(y, x + 1);
+                        getyx(stdscr, y, x);
+                        clearHighlight();
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                    }
+                }
+                else if (c == 'j')
+                {
+                    getyx(stdscr, y, x);
+                    if (map[y + preLine + 1] != -1 && y <= LINES - 4)
+                    {
+                        if (y == LINES - 6)
                         {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
+                            int nLines = 0;
+                            for (int i = 0; map[i] != -1; i++)
+                            {
+                                nLines++;
+                            }
+                            if (y + preLine + 1 != nLines - 3)
+                            {
+                                preLine++;
+                                cat(".unsaved.txt", stdout);
+                                move(y, x);
+                                clearHighlight();
+                                highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                                continue;
+                            }
                         }
+
+                        if (map[y + preLine + 1] >= x - 3)
+                        {
+                            move(y + 1, x);
+                        }
+                        else
+                        {
+                            move(y + 1, map[y + preLine + 1] + 3);
+                        }
+                        getyx(stdscr, y, x);
+                        clearHighlight();
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
                     }
-                    else if (c == end || c == '\n')
+                }
+                else if (c == 'h')
+                {
+                    getyx(stdscr, y, x);
+                    if (x > 4)
                     {
-                        *(data + i) = '\0';
+                        move(y, x - 1);
+                        getyx(stdscr, y, x);
+                        clearHighlight();
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                    }
+                }
+                else if (c == 'k')
+                {
+                    getyx(stdscr, y, x);
+                    if (y > 0)
+                    {
+                        if (y == 3)
+                        {
+                            if (preLine > 0)
+                            {
+                                preLine--;
+                                cat(".unsaved.txt", stdout);
+                                move(y, x);
+                                getyx(stdscr, y, x);
+                                clearHighlight();
+                                highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                                continue;
+                            }
+                        }
+
+                        if (map[y + preLine - 1] >= x - 3)
+                        {
+                            move(y - 1, x);
+                        }
+                        else
+                        {
+                            move(y - 1, map[y + preLine - 1] + 3);
+                        }
+                        getyx(stdscr, y, x);
+                        clearHighlight();
+                        highlight(xStart, yStart - preLine + firstPre, x, y, HIGHLIGHT_VISUAL_COLOR);
+                    }
+                }
+                else if (c == 'c')
+                {
+                    getyx(stdscr, y, x);
+                    // nothing selected
+                    if (yStart - preLine + firstPre == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(yStart - preLine + firstPre, xStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
                         break;
                     }
 
-                    *(data + i) = c;
+                    // direction
+                    char direction = 'f';
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    copy(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    move(y, x);
+                    break;
                 }
-                if (end == '"')
+                else if (c == 'd')
                 {
-                    getchar();
+                    // nothing selected
+                    if (yStart - preLine + firstPre == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(yStart - preLine + firstPre, xStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
+                        break;
+                    }
+
+                    // direction
+                    char direction = 'f';
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    removeString(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
+                    cat(".unsaved.txt", stdout);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    saved = 0;
+                    showFileStatus();
+                    if (direction == 'f')
+                    {
+                        x = xStart;
+                        y = yStart - preLine + firstPre;
+                    }
+                    move(y, x);
+                    break;
                 }
-            }
+                else if (c == 'x')
+                {
+                    // nothing selected
+                    if (yStart - preLine + firstPre == y && xStart == x)
+                    {
+                        attron(COLOR_PAIR(BAR_COLOR));
+                        move(LINES - 1, 0);
+                        printw("Nothing selected");
+                        int xx, yy;
+                        getyx(stdscr, yy, xx);
+                        pressEnter(yy, xx);
+                        getch();
+                        clearBar();
+                        changeMode("NORMAL");
+                        move(yStart - preLine + firstPre, xStart);
+                        attroff(COLOR_PAIR(BAR_COLOR));
+                        break;
+                    }
 
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                printf("Invalid position\n");
-                pipe = 0;
-                continue;
-            }
-            
-
-            // result
-            int result = insert(file, data, line, pos);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
+                    // direction
+                    char direction = 'f';
+                    if (yStart - preLine + firstPre > y || (yStart - preLine + firstPre == y && xStart > x))
+                    {
+                        direction = 'b';
+                    }
+                    cut(".unsaved.txt", yStart + firstPre + 1, xStart - 4, selectLength, direction);
+                    cat(".unsaved.txt", stdout);
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    saved = 0;
+                    showFileStatus();
+                    if (direction == 'f')
+                    {
+                        x = xStart;
+                        y = yStart - preLine + firstPre;
+                    }
+                    move(y, x);
+                    break;
+                }
+                else if (c == 27)
+                {
+                    changeMode("NORMAL");
+                    clearHighlight();
+                    move(yStart - preLine + firstPre, xStart);
+                    break;
+                }
             }
         }
-        else if (strcmp(command, "cat") == 0)
+        else if (c == 'p')
         {
-            char *c = (char *)calloc(1, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(c);
-
-            // pipe possibility
-            if (*c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = cat(file, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = cat(file, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
+            int x, y;
+            getyx(stdscr, y, x);
+            paste(".unsaved.txt", y + preLine + 1, x - 4);
+            cat(".unsaved.txt", stdout);
+            saved = 0;
+            showFileStatus();
+            move(y, x);
         }
-        else if (strcmp(command, "remove") == 0)
+        else if (c == 'u')
         {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = removeString(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
+            int x, y;
+            getyx(stdscr, y, x);
+            undo(".unsaved.txt");
+            cat(".unsaved.txt", stdout);
+            saved = 0;
+            showFileStatus();
+            move(y, x);
         }
-        else if (strcmp(command, "copy") == 0)
+        else if (c == '/')
         {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
+            int x, y;
+            getyx(stdscr, y, x);
 
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = copy(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "cut") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos, length;
-            char direction;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // -size attribute
-            scanf("%s ", attribute);
-            scanf("%d", &length);
-            getchar();
-            if (length <= 0)
-            {
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-                printf("Invalid size\n");
-                continue;
-            }
-
-            // -f or -b flag
-            scanf("%s", attribute);
-            direction = attribute[1];
-            getchar();
-
-            // result
-            int result = cut(file, line, pos, length, direction);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "paste") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int line, pos;
-
-            // -file attribute
-            scanf("%s ", attribute);
-            file = inputPath(NULL);
-
-            // -pos attribute
-            scanf("%s ", attribute);
-            scanf("%d:%d", &line, &pos);
-            getchar();
-            if (line <= 0 || pos < 0)
-            {
-                printf("Invalid position\n");
-                continue;
-            }
-
-            // result
-            int result = paste(file, line, pos);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "find") == 0)
-        {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            char *input = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
             char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, at = 1;
+            echo();
+            move(LINES - 1, 0);
+            attron(COLOR_PAIR(BAR_COLOR));
 
-            // -str attribute
-            if (pipe == 1)
+            // input
+            addch('/');
+            getstr(input);
+
+            // key
+            int indent = 0;
+            for (int i = 0;; i++)
             {
-                pipe = 0;
-                key = readPipe();
-            }
-            else
-            {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
+                c = *(input + indent + i);
+                if (c == '\\')
                 {
-                    if (i != 0 || end == '"')
+                    indent++;
+                    c = *(input + indent + i);
+                    switch (c)
                     {
-                        c = getchar();
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case '\\':
+                        c = '\\';
+                        break;
+                    case '"':
+                        c = '\"';
+                        break;
+                    case '*':
+                        *(key + i) = '\\';
+                        c = '*';
+                        i++;
+                        break;
                     }
-                    if (c == '\\')
+                }
+                else if (c == '\0')
+                {
+                    *(key + i) = '\0';
+                    break;
+                }
+
+                *(key + i) = c;
+            }
+
+            clearBar();
+            int interval[INPUT_MAX_CHAR][2];
+            for (int i = 0; i < INPUT_MAX_CHAR; i++)
+            {
+                interval[i][0] = -1;
+                interval[i][1] = -1;
+            }
+            replace(".unsaved.txt", key, "", 4, 1, interval);
+            for (int i = 0; interval[i][0] != -1; i++)
+            {
+                int x1, x2, y1, y2;
+                int *px1 = &x1, *py1 = &y1, *px2 = &x2, *py2 = &y2;
+                locToLineAndPos(interval[i][0], py1, px1);
+                locToLineAndPos(interval[i][1] + 1, py2, px2);
+                highlight(x1, y1, x2, y2, HIGHLIGHT_FIND_COLOR);
+            }
+            move(y, x);
+            attroff(COLOR_PAIR(BAR_COLOR));
+            noecho();
+
+            // move on found expressions
+            while (1)
+            {
+                if (getch() == 'n')
+                {
+                    int found = 0;
+                    int xx = -1, yy = -1;
+                    int *pxx = &xx, *pyy = &yy;
+                    for (int i = 0; interval[i][0] != -1; i++)
                     {
-                        c = getchar();
-                        switch (c)
+                        locToLineAndPos(interval[i][0], pyy, pxx);
+                        if (yy > y || (yy == y && xx > x))
                         {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
-                        case '*':
-                            *(key + i) = '\\';
-                            c = '*';
-                            i++;
+                            found = 1;
+                            y = yy;
+                            x = xx;
                             break;
                         }
                     }
-                    else if (c == end || c == '\n')
+                    if (found == 0 && interval[0][0] != -1)
                     {
-                        *(key + i) = '\0';
-                        break;
+                        locToLineAndPos(interval[0][0], pyy, pxx);
+                        y = yy;
+                        x = xx;
+                        move(y, x);
                     }
-
-                    *(key + i) = c;
-                }
-                if (end == '"')
-                {
-                    getchar();
-                }
-            }
-
-            // -file attribute
-            scanf("%s ", attribute);
-            char *last = (char *)calloc(1, sizeof(char));
-            file = inputPath(last);
-            char c = *last;
-
-            // possible options (or pipe)
-            for (int i = 0; i < 5; i++)
-            {
-                if (c == ' ')
-                {
-                    scanf("%s", attribute);
-                    if (strcmp(attribute, "-count") == 0)
+                    else if (found == 1)
                     {
-                        options += 8;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-at") == 0)
-                    {
-                        options += 4;
-                        scanf(" %d", &at);
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-byword") == 0)
-                    {
-                        options += 2;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-all") == 0)
-                    {
-                        options++;
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "=D") == 0)
-                    {
-                        pipe = 1;
-                        scanf(" %s", command);
-                        break;
+                        move(y, x);
                     }
                 }
                 else
                 {
+                    getyx(stdscr, y, x);
+                    clearHighlight();
+                    move(y, x);
                     break;
                 }
             }
-
-            // result
-            int result;
-            if (pipe == 0)
+        }
+        else if (c == '=')
+        {
+            int x, y;
+            getyx(stdscr, y, x);
+            if (autoIndent(".unsaved.txt") == 3)
             {
-                result = find(file, key, options, at, stdout);
+                attron(COLOR_PAIR(BAR_COLOR));
+                mvprintw(LINES - 1, 0, "Invalid set of curly brackets!");
+                int xx, yy;
+                getyx(stdscr, yy, xx);
+                pressEnter(yy, xx);
+                getch();
+                clearBar();
+                attroff(COLOR_PAIR(BAR_COLOR));
+                move(y, x);
+                continue;
             }
-            else
+            cat(".unsaved.txt", stdout);
+            saved = 0;
+            showFileStatus();
+            move(y, x);
+        }
+        else if (c == 'i')
+        {
+            int xStart, yStart;
+            getyx(stdscr, yStart, xStart);
+            changeMode("INSERT");
+            move(yStart, xStart);
+            while (1)
             {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = find(file, key, options, at, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid set of options!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
+                int x, y;
+                getyx(stdscr, y, x);
+                c = getch();
+                if ((c >= 32 && c <= 126) || c == 10)
                 {
-                    if (getchar() == '\n')
+                    char *string = (char *)calloc(1, sizeof(char));
+                    *string = c;
+
+                    insert(".unsaved.txt", string, y + preLine + 1, x - 4);
+                    saved = 0;
+                    cat(".unsaved.txt", stdout);
+                    showFileStatus();
+                    if (c == 10)
                     {
-                        break;
+                        if (y == LINES - 3)
+                        {
+                            preLine++;
+                            cat(".unsaved.txt", stdout);
+                            move(y, 4);
+                        }
+                        else
+                        {
+                            move(y + 1, 4);
+                        }
                     }
+                    else
+                    {
+                        move(y, x + 1);
+                    }
+                }
+                else if (c == 127)
+                {
+                    removeString(".unsaved.txt", y + preLine + 1, x - 4, 1, 'b');
+                    saved = 0;
+                    cat(".unsaved.txt", stdout);
+                    showFileStatus();
+                    if (x == 4)
+                    {
+                        if (y > 0)
+                        {
+                            move(y - 1, map[y + preLine - 1] + 3);
+                        }
+                        else if (y == 0 && preLine > 0)
+                        {
+                            preLine--;
+                            cat(".unsaved.txt", stdout);
+                            move(y, map[y + preLine] + 3);
+                        }
+                    }
+                    else
+                    {
+                        move(y, x - 1);
+                    }
+                }
+                else if (c == 27)
+                {
+                    changeMode("NORMAL");
+                    move(y, x);
+                    break;
                 }
             }
         }
-        else if (strcmp(command, "replace") == 0)
+    }
+
+    endwin();
+    return 0;
+}
+
+int inputAndCallCommand()
+{
+    int *loc = &n;
+    char *command = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+
+    char trash;
+    if (isPipe == 0)
+    {
+        n = 0;
+        getstr(input);
+    }
+    trash = scan(command, input, loc);
+
+    if (strcmp(command, "newfile") == 0)
+    {
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // result
+        int result = newFile(file);
+        clearBar();
+        if (result == 1)
         {
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, at = 1;
+            printw("This file already exists");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "insert") == 0)
+    {
+        int line, pos;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *data = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
 
-            // -str1 (key) attribute
-            if (pipe == 1)
-            {
-                pipe = 0;
-                key = readPipe();
-            }
-            else
-            {
-                scanf("%s ", attribute);
-                char c = getchar();
-                char end = (c == '"') ? '"' : ' ';
-                for (int i = 0;; i++)
-                {
-                    if (i != 0 || end == '"')
-                    {
-                        c = getchar();
-                    }
-                    if (c == '\\')
-                    {
-                        c = getchar();
-                        switch (c)
-                        {
-                        case 'n':
-                            c = '\n';
-                            break;
-                        case '\\':
-                            c = '\\';
-                            break;
-                        case '"':
-                            c = '\"';
-                            break;
-                        case '*':
-                            *(key + i) = '\\';
-                            c = '*';
-                            i++;
-                            break;
-                        }
-                    }
-                    else if (c == end || c == '\n')
-                    {
-                        *(key + i) = '\0';
-                        break;
-                    }
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
 
-                    *(key + i) = c;
-                }
-                if (end == '"')
-                {
-                    getchar();
-                }
-            }
-
-            // -str2 (alternate) attribute
-            scanf("%s ", attribute);
-            char c = getchar();
+        // -str attribute
+        if (isPipe == 1)
+        {
+            data = readPipe();
+            isPipe = 0;
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
             char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
             for (int i = 0;; i++)
             {
-                if (i != 0 || end == '"')
-                {
-                    c = getchar();
-                }
+                c = *(input + *loc + i);
                 if (c == '\\')
                 {
-                    c = getchar();
+                    (*loc)++;
+                    c = *(input + *loc + i);
                     switch (c)
                     {
                     case 'n':
@@ -639,443 +668,1575 @@ void inputAndCallCommand()
                         break;
                     }
                 }
-                else if (c == end || c == '\n')
+                else if (c == end || c == '\0')
                 {
-                    *(alternate + i) = '\0';
+                    *loc += i + 1;
+                    *(data + i) = '\0';
                     break;
                 }
 
-                *(alternate + i) = c;
+                *(data + i) = c;
             }
             if (end == '"')
             {
-                getchar();
-            }
-
-            // -file attribute
-            scanf("%s ", attribute);
-            char *last = (char *)calloc(1, sizeof(char));
-            file = inputPath(last);
-            c = *last;
-
-            // possible options (or pipe)
-            for (int i = 0; i < 2; i++)
-            {
-                if (c == ' ')
-                {
-                    scanf("%s", attribute);
-                    if (strcmp(attribute, "-at") == 0)
-                    {
-                        options += 2;
-                        scanf(" %d", &at);
-                        c = getchar();
-                    }
-                    else if (strcmp(attribute, "-all") == 0)
-                    {
-                        options++;
-                        c = getchar();
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            // result
-            int result = replace(file, key, alternate, options, at);
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid set of options!\n");
-            }
-            else if (result == 4)
-            {
-                printf("Not found!\n");
-            }
-            else
-            {
-                printf("Success\n");
+                (*loc)++;
             }
         }
-        else if (strcmp(command, "grep") == 0)
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
         {
-            char *files[50];
-            char *key = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int options = 0, n = 0;
-            char c;
-
-            // -files, -str and options
-            for (int i = 0; i < 3; i++)
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "-c") == 0)
-                {
-                    options = 1;
-                }
-                else if (strcmp(attribute, "-l") == 0)
-                {
-                    options = 2;
-                }
-                else if (strcmp(attribute, "-str") == 0)
-                {
-                    if (i == 0)
-                    {
-                        i++;
-                    }
-                    c = getchar();
-                    char end = (c == '"') ? '"' : ' ';
-                    for (int i = 0;; i++)
-                    {
-                        if (i != 0 || end == '"')
-                        {
-                            c = getchar();
-                        }
-                        if (c == '\\')
-                        {
-                            c = getchar();
-                            switch (c)
-                            {
-                            case '\\':
-                                c = '\\';
-                                break;
-                            case '"':
-                                c = '\"';
-                                break;
-                            }
-                        }
-                        else if (c == end || c == '\n')
-                        {
-                            *(key + i) = '\0';
-                            break;
-                        }
-
-                        *(key + i) = c;
-                    }
-                    if (end == '"')
-                    {
-                        c = getchar();
-                    }
-                }
-                else if (strcmp(attribute, "-files") == 0)
-                {
-                    if (i == 0)
-                    {
-                        i++;
-                    }
-                    if (pipe == 1)
-                    {
-                        i++;
-                        pipe = 0;
-                        key = readPipe();
-                    }
-                    c = ' ';
-                    for (int j = 0; c != '\n'; j++)
-                    {
-                        files[n] = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-                        c = getchar();
-                        char end;
-                        if (c == '"')
-                        {
-                            end = '"';
-                        }
-                        else if (c == '=')
-                        {
-                            c = ' ';
-                            break;
-                        }
-                        else
-                        {
-                            end = ' ';
-                        }
-                        if (end == '"')
-                        {
-                            getchar();
-                        }
-                        for (int i = 0;; i++)
-                        {
-                            c = getchar();
-                            if (c == end || c == '\n')
-                            {
-                                *(files[n] + i) = '\0';
-                                break;
-                            }
-                            *(files[n] + i) = c;
-                        }
-                        if (end == '"')
-                        {
-                            c = getchar();
-                        }
-                        n++;
-                    }
-                }
-            }
-
-            // pipe possibility
-            if (c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = grep(files, n, key, options, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = grep(files, n, key, options, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Some invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("Some files doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Not found!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
+            clearBar();
+            printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            isPipe = 0;
+            return 1;
         }
-        else if (strcmp(command, "undo") == 0)
-        {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
 
-            scanf("%s ", attribute);
-            int result = undo(inputPath(NULL));
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("No changes has been made to this file!\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
+        // result
+        int result = insert(file, data, line, pos);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
         }
-        else if (strcmp(command, "auto-indent") == 0)
+        else if (result == 2)
         {
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            scanf("%s ", attribute);
-
-            // result
-            int result = autoIndent(inputPath(NULL));
-            if (result == 1)
-            {
-                printf("Invalid path\n");
-            }
-            else if (result == 2)
-            {
-                printf("File doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Incorrect set of curly brackets!\n");
-            }
-            else
-            {
-                printf("Success\n");
-            }
-        }
-        else if (strcmp(command, "compare") == 0)
-        {
-            char *c = (char *)calloc(1, sizeof(char));
-            char *file1 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *file2 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-            char *attribute = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-
-            // -file1 attribute
-            file1 = inputPath(c);
-
-            // -file2 attribute
-            file2 = inputPath(c);
-
-            // pipe possibility
-            if (*c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = compare(file1, file2, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = compare(file1, file2, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid path for 1st file\n");
-            }
-            else if (result == 2)
-            {
-                printf("1st file doesn't exist\n");
-            }
-            else if (result == 3)
-            {
-                printf("Invalid path for 2nd file\n");
-            }
-            else if (result == 4)
-            {
-                printf("2nd file doesn't exist\n");
-            }
-            else if (result == 5)
-            {
-                printf("2 files are the same\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        else if (strcmp(command, "tree") == 0)
-        {
-            int depth;
-            char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
-            int history[200] = {0};
-
-            // depth
-            scanf("%d", &depth);
-            char c = getchar();
-
-            // pipe possibility
-            if (c == ' ')
-            {
-                scanf("%s ", attribute);
-                if (strcmp(attribute, "=D") == 0)
-                {
-                    pipe = 1;
-                    scanf("%s", command);
-                }
-            }
-
-            // result
-            int result;
-            if (pipe == 0)
-            {
-                result = tree("root", 0, depth, history, stdout);
-            }
-            else
-            {
-                FILE *pipe = fopen("root/.pipe.txt", "w");
-                result = tree("root", 0, depth, history, pipe);
-                fclose(pipe);
-            }
-
-            if (result == 1)
-            {
-                printf("Invalid depth!\n");
-            }
-            if (pipe == 1 && result != 0)
-            {
-                pipe = 0;
-                while (1)
-                {
-                    if (getchar() == '\n')
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        else if (strcmp(command, "exit") == 0)
-        {
-            FILE *clipboard = fopen("root/.clipboard.txt", "w");
-            fclose(clipboard);
-            FILE *pipe = fopen("root/.pipe.txt", "w");
-            fclose(pipe);
-            break;
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
         }
         else
         {
-            if (trash == '\n')
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            if (strcmp(file, currentFileName) == 0)
             {
-                printf("Invalid command\n");
-                continue;
+                preLine = 0;
+                cat(file, stdout);
+                saved = 1;
+                showFileStatus();
+                move(LINES - 1, 7);
             }
-            while (1)
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "cat") == 0)
+    {
+        char *c = (char *)calloc(1, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(c, input, loc);
+
+        // pipe possibility
+        if (*c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
             {
-                if (getchar() == '\n')
+                isPipe = 1;
+            }
+        }
+
+        // result
+        int result;
+        if (isPipe == 0)
+        {
+            preLine = 0;
+            result = cat(file, stdout);
+        }
+        else
+        {
+            FILE *pipe = fopen(".pipe.txt", "w");
+            result = cat(file, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            isPipe = 0;
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            isPipe = 0;
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (isPipe == 0)
+        {
+            if (openStatus == 1)
+            {
+                save();
+            }
+            *currentFileName = '\0';
+            clearBar();
+            move(0, 4);
+            openStatus = 0;
+            exist = 1;
+            saved = 0;
+            showFileStatus();
+        }
+        if (isPipe == 1)
+        {
+            inputAndCallCommand();
+        }
+    }
+    else if (strcmp(command, "open") == 0)
+    {
+        char *file = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+
+        // file name
+        preLine = 0;
+        open(inputPath(NULL, input, loc));
+        clearBar();
+        move(0, 4);
+        openStatus = 1;
+        saved = 1;
+        exist = 1;
+        showFileStatus();
+    }
+    else if (strcmp(command, "remove") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            clearBar();
+            printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            clearBar();
+            printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = removeString(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            if (strcmp(file, currentFileName) == 0)
+            {
+                preLine = 0;
+                cat(file, stdout);
+                saved = 1;
+                showFileStatus();
+                move(LINES - 1, 7);
+            }
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "copy") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            clearBar();
+            printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            clearBar();
+            printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = copy(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "cut") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos, length;
+        char direction;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            clearBar();
+            printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -size attribute
+        scan(attribute, input, loc);
+        length = scanNumber(NULL, input, loc);
+        if (length <= 0)
+        {
+            clearBar();
+            printw("Invalid size");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // -f or -b flag
+        scan(attribute, input, loc);
+        direction = attribute[1];
+
+        // result
+        int result = cut(file, line, pos, length, direction);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            if (strcmp(file, currentFileName) == 0)
+            {
+                preLine = 0;
+                cat(file, stdout);
+                saved = 1;
+                showFileStatus();
+                move(LINES - 1, 7);
+            }
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "paste") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int line, pos;
+
+        // -file attribute
+        scan(attribute, input, loc);
+        file = inputPath(NULL, input, loc);
+
+        // -pos attribute
+        scan(attribute, input, loc);
+        line = scanNumber(NULL, input, loc);
+        pos = scanNumber(NULL, input, loc);
+        if (line <= 0 || pos < 0)
+        {
+            clearBar();
+            printw("Invalid position");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+            return 1;
+        }
+
+        // result
+        int result = paste(file, line, pos);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            printw("Success");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            if (strcmp(file, currentFileName) == 0)
+            {
+                preLine = 0;
+                cat(file, stdout);
+                saved = 1;
+                showFileStatus();
+                move(LINES - 1, 7);
+            }
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+    }
+    else if (strcmp(command, "find") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, at = 1;
+
+        // -str attribute
+        if (isPipe == 1)
+        {
+            isPipe = 0;
+            key = readPipe();
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
+            char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+            for (int i = 0;; i++)
+            {
+                c = *(input + *loc + i);
+                if (c == '\\')
                 {
+                    (*loc)++;
+                    c = *(input + *loc + i);
+                    switch (c)
+                    {
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case '\\':
+                        c = '\\';
+                        break;
+                    case '"':
+                        c = '\"';
+                        break;
+                    case '*':
+                        *(key + i) = '\\';
+                        c = '*';
+                        i++;
+                        break;
+                    }
+                }
+                else if (c == end || c == '\0')
+                {
+                    *loc += i + 1;
+                    *(key + i) = '\0';
+                    break;
+                }
+
+                *(key + i) = c;
+            }
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+        }
+
+        // -file attribute
+        scan(attribute, input, loc);
+        char *last = (char *)calloc(1, sizeof(char));
+        file = inputPath(last, input, loc);
+        char c = *last;
+
+        // possible options (or pipe)
+        for (int i = 0; i < 5; i++)
+        {
+            if (c == ' ')
+            {
+                c = scan(attribute, input, loc);
+                if (strcmp(attribute, "-count") == 0)
+                {
+                    options += 8;
+                }
+                else if (strcmp(attribute, "-at") == 0)
+                {
+                    options += 4;
+                    at = scanNumber(last, input, loc);
+                    if (at <= 0)
+                    {
+                        clearBar();
+                        printw("Invalid number for -at attribute");
+                        int x, y;
+                        getyx(stdscr, y, x);
+                        pressEnter(y, x);
+                        getch();
+                        clearBar();
+                        move(0, 4);
+                    }
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-byword") == 0)
+                {
+                    options += 2;
+                }
+                else if (strcmp(attribute, "-all") == 0)
+                {
+                    options++;
+                }
+                else if (strcmp(attribute, "=D") == 0)
+                {
+                    isPipe = 1;
                     break;
                 }
             }
-            printf("Invalid command\n");
-            continue;
+            else
+            {
+                break;
+            }
+        }
+
+        // result
+        int result;
+        if (isPipe == 0)
+        {
+            FILE *space = fopen(".space.txt", "w");
+            result = find(file, key, options, at, space);
+            fclose(space);
+        }
+        else
+        {
+            FILE *pipe = fopen(".pipe.txt", "w");
+            result = find(file, key, options, at, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            isPipe = 0;
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            isPipe = 0;
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            isPipe = 0;
+            printw("Invalid set of options!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 4)
+        {
+            isPipe = 0;
+            printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (isPipe == 0)
+        {
+            if (openStatus == 1)
+            {
+                save();
+            }
+            preLine = 0;
+            cat(".space.txt", stdout);
+            *currentFileName = '\0';
+            clearBar();
+            move(0, 4);
+            openStatus = 0;
+            exist = 1;
+            saved = 0;
+            showFileStatus();
+        }
+        if (isPipe == 1)
+        {
+            inputAndCallCommand();
         }
     }
+    else if (strcmp(command, "replace") == 0)
+    {
+        int thisFile = 0;
+        int interval[INPUT_MAX_CHAR][2];
+        for (int i = 0; i < INPUT_MAX_CHAR; i++)
+        {
+            interval[i][0] = -1;
+            interval[i][1] = -1;
+        }
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *key = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *alternate = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, at = 1;
+
+        // -str1 (key) attribute
+        if (isPipe == 1)
+        {
+            isPipe = 0;
+            key = readPipe();
+        }
+        else
+        {
+            scan(attribute, input, loc);
+            char c = *(input + *loc);
+            char end = (c == '"') ? '"' : ' ';
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+            for (int i = 0;; i++)
+            {
+                c = *(input + *loc + i);
+                if (c == '\\')
+                {
+                    (*loc)++;
+                    c = *(input + *loc + i);
+                    switch (c)
+                    {
+                    case 'n':
+                        c = '\n';
+                        break;
+                    case '\\':
+                        c = '\\';
+                        break;
+                    case '"':
+                        c = '\"';
+                        break;
+                    case '*':
+                        *(key + i) = '\\';
+                        c = '*';
+                        i++;
+                        break;
+                    }
+                }
+                else if (c == end || c == '\0')
+                {
+                    *loc += i + 1;
+                    *(key + i) = '\0';
+                    break;
+                }
+
+                *(key + i) = c;
+            }
+            if (end == '"')
+            {
+                (*loc)++;
+            }
+        }
+
+        // -str2 (alternate) attribute
+        scan(attribute, input, loc);
+        char c = *(input + *loc);
+        char end = (c == '"') ? '"' : ' ';
+        if (end == '"')
+        {
+            (*loc)++;
+        }
+        for (int i = 0;; i++)
+        {
+            c = *(input + *loc + i);
+            if (c == '\\')
+            {
+                (*loc)++;
+                c = *(input + *loc + i);
+                switch (c)
+                {
+                case 'n':
+                    c = '\n';
+                    break;
+                case '\\':
+                    c = '\\';
+                    break;
+                case '"':
+                    c = '\"';
+                    break;
+                }
+            }
+            else if (c == end || c == '\0')
+            {
+                *loc += i + 1;
+                *(alternate + i) = '\0';
+                break;
+            }
+
+            *(alternate + i) = c;
+        }
+        if (end == '"')
+        {
+            (*loc)++;
+        }
+
+        // -file and possible options
+        char *last = (char *)calloc(1, sizeof(char));
+        for (int i = 0; i < 3; i++)
+        {
+            if (c == ' ')
+            {
+                c = scan(attribute, input, loc);
+                if (strcmp(attribute, "-file") == 0)
+                {
+                    file = inputPath(last, input, loc);
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-at") == 0)
+                {
+                    options += 2;
+                    at = scanNumber(last, input, loc);
+                    if (at <= 0)
+                    {
+                        clearBar();
+                        printw("Invalid number for -at attribute");
+                        int x, y;
+                        getyx(stdscr, y, x);
+                        pressEnter(y, x);
+                        getch();
+                        clearBar();
+                        move(0, 4);
+                    }
+                    c = *last;
+                }
+                else if (strcmp(attribute, "-all") == 0)
+                {
+                    options++;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (*file == '\0')
+        {
+            thisFile = 1;
+            file = ".unsaved.txt";
+        }
+
+        // result
+        int result = replace(file, key, alternate, options, at, interval);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            printw("Invalid set of options!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 4)
+        {
+            printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result != 5)
+        {
+            if (thisFile == 0)
+            {
+                printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    preLine = 0;
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                    move(LINES - 1, 7);
+                }
+                getch();
+                clearBar();
+                move(0, 4);
+            }
+            else
+            {
+                preLine = 0;
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                saved = 0;
+                showFileStatus();
+                if (options == 0 || options == 1)
+                {
+                    if (interval[0][0] != -1)
+                    {
+                        int x, y;
+                        int *px = &x, *py = &y;
+                        locToLineAndPos(interval[0][0], py, px);
+                        move(y, x);
+                    }
+                }
+                else if (options == 2)
+                {
+                    if (interval[at - 1][0] != -1)
+                    {
+                        int x, y;
+                        int *px = &x, *py = &y;
+                        locToLineAndPos(interval[at - 1][0], py, px);
+                        move(y, x);
+                    }
+                }
+
+                return 1;
+            }
+        }
+    }
+    else if (strcmp(command, "grep") == 0)
+    {
+        char *files[50];
+        char *key = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int options = 0, n = 0;
+        char c;
+
+        // -files, -str and options
+        for (int i = 0; i < 3; i++)
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "-c") == 0)
+            {
+                options = 1;
+            }
+            else if (strcmp(attribute, "-l") == 0)
+            {
+                options = 2;
+            }
+            else if (strcmp(attribute, "-str") == 0)
+            {
+                if (i == 0)
+                {
+                    i++;
+                }
+                c = *(input + *loc + i);
+                char end = (c == '"') ? '"' : ' ';
+                if (end == '"')
+                {
+                    (*loc)++;
+                }
+                for (int i = 0;; i++)
+                {
+                    c = *(input + *loc + i);
+                    if (c == '\\')
+                    {
+                        (*loc)++;
+                        c = *(input + *loc + i);
+                        switch (c)
+                        {
+                        case '\\':
+                            c = '\\';
+                            break;
+                        case '"':
+                            c = '\"';
+                            break;
+                        }
+                    }
+                    else if (c == end || c == '\0')
+                    {
+                        *loc += i + 1;
+                        *(key + i) = '\0';
+                        break;
+                    }
+
+                    *(key + i) = c;
+                }
+                if (end == '"')
+                {
+                    c = *(input + *loc);
+                    (*loc)++;
+                }
+            }
+            else if (strcmp(attribute, "-files") == 0)
+            {
+                if (i == 0)
+                {
+                    i++;
+                }
+                if (isPipe == 1)
+                {
+                    i++;
+                    isPipe = 0;
+                    key = readPipe();
+                }
+                c = ' ';
+                for (int j = 0; c != '\0'; j++)
+                {
+                    files[n] = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+                    c = *(input + *loc);
+                    (*loc)++;
+                    char end;
+                    if (c == '"')
+                    {
+                        end = '"';
+                    }
+                    else if (c == '=')
+                    {
+                        c = ' ';
+                        break;
+                    }
+                    else
+                    {
+                        end = ' ';
+                    }
+                    if (end == '"')
+                    {
+                        (*loc)++;
+                    }
+                    for (int i = 0;; i++)
+                    {
+                        c = *(input + *loc + i);
+                        if (c == end || c == '\0')
+                        {
+                            *loc += i + 1;
+                            *(files[n] + i) = '\0';
+                            break;
+                        }
+                        *(files[n] + i) = c;
+                    }
+                    if (end == '"')
+                    {
+                        c = *(input + *loc);
+                        (*loc)++;
+                    }
+                    n++;
+                }
+            }
+        }
+
+        // pipe possibility
+        if (c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "D") == 0)
+            {
+                isPipe = 1;
+            }
+        }
+
+        // result
+        int result;
+        if (isPipe == 0)
+        {
+            FILE *space = fopen(".space.txt", "w");
+            result = grep(files, n, key, options, space);
+            fclose(space);
+        }
+        else
+        {
+            FILE *pipe = fopen(".pipe.txt", "w");
+            result = grep(files, n, key, options, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            isPipe = 0;
+            printw("Some invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            isPipe = 0;
+            printw("Some files doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            isPipe = 0;
+            printw("Not found!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (isPipe == 0)
+        {
+            if (openStatus == 1)
+            {
+                save();
+            }
+            preLine = 0;
+            cat(".space.txt", stdout);
+            *currentFileName = '\0';
+            clearBar();
+            move(0, 4);
+            openStatus = 0;
+            exist = 1;
+            saved = 0;
+            showFileStatus();
+        }
+        if (isPipe == 1)
+        {
+            inputAndCallCommand();
+        }
+    }
+    else if (strcmp(command, "undo") == 0)
+    {
+        int thisFile = 0;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        // -file attirbute
+        if (trash == ' ')
+        {
+            scan(attribute, input, loc);
+            file = inputPath(NULL, input, loc);
+        }
+        else if (trash == '\0')
+        {
+            thisFile = 1;
+            file = ".unsaved.txt";
+        }
+
+        // result
+        int result = undo(file);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            printw("No changes has been made to this file!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            if (thisFile == 0)
+            {
+                printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    preLine = 0;
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                    move(LINES - 1, 7);
+                }
+                getch();
+                clearBar();
+                move(0, 4);
+            }
+            else
+            {
+                preLine = 0;
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                move(0, 4);
+                saved = 0;
+                showFileStatus();
+                return 1;
+            }
+        }
+    }
+    else if (strcmp(command, "auto-indent") == 0)
+    {
+        int thisFile = 0;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        if (trash == ' ')
+        {
+            scan(attribute, input, loc);
+            file = inputPath(NULL, input, loc);
+        }
+        else if (trash == '\0')
+        {
+            thisFile = 1;
+            file = ".unsaved.txt";
+        }
+
+        // result
+        int result = autoIndent(file);
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid path");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            printw("File doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            printw("Incorrect set of curly brackets!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearBar();
+            move(0, 4);
+        }
+        else
+        {
+            if (thisFile == 0)
+            {
+                printw("Success");
+                int x, y;
+                getyx(stdscr, y, x);
+                pressEnter(y, x);
+                if (strcmp(file, currentFileName) == 0)
+                {
+                    preLine = 0;
+                    cat(file, stdout);
+                    saved = 1;
+                    showFileStatus();
+                    move(LINES - 1, 7);
+                }
+                getch();
+                clearBar();
+                move(0, 4);
+            }
+            else
+            {
+                preLine = 0;
+                cat(".unsaved.txt", stdout);
+                clearBar();
+                move(0, 4);
+                saved = 0;
+                showFileStatus();
+                return 1;
+            }
+        }
+    }
+    else if (strcmp(command, "compare") == 0)
+    {
+        char *c = (char *)calloc(1, sizeof(char));
+        char *file1 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *file2 = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        char *attribute = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        // -file1 attribute
+        file1 = inputPath(c, input, loc);
+
+        // -file2 attribute
+        file2 = inputPath(c, input, loc);
+
+        // pipe possibility
+        if (*c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
+            {
+                isPipe = 1;
+            }
+        }
+
+        // result
+        int result;
+        if (isPipe == 0)
+        {
+            FILE *space = fopen(".space.txt", "w");
+            result = compare(file1, file2, space);
+            fclose(space);
+        }
+        else
+        {
+            FILE *pipe = fopen(".pipe.txt", "w");
+            result = compare(file1, file2, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            isPipe = 0;
+            printw("Invalid path for 1st file");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (result == 2)
+        {
+            isPipe = 0;
+            printw("1st file doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (result == 3)
+        {
+            isPipe = 0;
+            printw("Invalid path for 2nd file");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (result == 4)
+        {
+            isPipe = 0;
+            printw("2nd file doesn't exist");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (result == 5)
+        {
+            isPipe = 0;
+            printw("2 files are the same");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (isPipe == 0)
+        {
+            if (openStatus == 1)
+            {
+                save();
+            }
+            preLine = 0;
+            cat(".space.txt", stdout);
+            *currentFileName = '\0';
+            clearBar();
+            move(0, 4);
+            openStatus = 0;
+            exist = 1;
+            saved = 0;
+            showFileStatus();
+        }
+        if (isPipe == 1)
+        {
+            inputAndCallCommand();
+        }
+    }
+    else if (strcmp(command, "tree") == 0)
+    {
+        int depth;
+        char *attribute = (char *)calloc(ATTR_MAX_CHAR, sizeof(char));
+        int history[200] = {0};
+
+        // depth
+        char *last = (char *)calloc(1, sizeof(char));
+        depth = scanNumber(last, input, loc);
+        char c = *last;
+
+        // pipe possibility
+        if (c == ' ')
+        {
+            scan(attribute, input, loc);
+            if (strcmp(attribute, "=D") == 0)
+            {
+                isPipe = 1;
+            }
+        }
+
+        // result
+        int result;
+        if (isPipe == 0)
+        {
+            FILE *space = fopen(".space.txt", "w");
+            result = tree("root", 0, depth, history, space);
+            fclose(space);
+        }
+        else
+        {
+            FILE *pipe = fopen(".pipe.txt", "w");
+            result = tree("root", 0, depth, history, pipe);
+            fclose(pipe);
+        }
+        clearBar();
+        if (result == 1)
+        {
+            printw("Invalid depth!");
+            int x, y;
+            getyx(stdscr, y, x);
+            pressEnter(y, x);
+            getch();
+            clearScreen();
+            move(0, 4);
+        }
+        else if (isPipe == 0)
+        {
+            if (openStatus == 1)
+            {
+                save();
+            }
+            preLine = 0;
+            cat(".space.txt", stdout);
+            *currentFileName = '\0';
+            clearBar();
+            move(0, 4);
+            openStatus = 0;
+            exist = 1;
+            saved = 0;
+            showFileStatus();
+        }
+        if (isPipe == 1)
+        {
+            inputAndCallCommand();
+        }
+    }
+    else if (strcmp(command, "save") == 0)
+    {
+        save();
+        clearBar();
+        printw("Success");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
+        getch();
+        clearBar();
+        move(0, 4);
+    }
+    else if (strcmp(command, "saveas") == 0)
+    {
+        char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+
+        // new name for saving
+        file = inputPath(NULL, input, loc);
+
+        saveAs(file);
+        clearBar();
+        printw("Success");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
+        getch();
+        clearBar();
+        move(0, 4);
+    }
+    else if (strcmp(command, "exit") == 0)
+    {
+        if (openStatus == 1 && saved == 0)
+        {
+            save();
+        }
+        FILE *clipboard = fopen(".clipboard.txt", "w");
+        fclose(clipboard);
+        FILE *pipe = fopen(".pipe.txt", "w");
+        fclose(pipe);
+        FILE *unsaved = fopen(".unsaved.txt", "w");
+        fclose(unsaved);
+        FILE *backup = fopen(".backup.txt", "w");
+        fclose(backup);
+        FILE *space = fopen(".space.txt", "w");
+        fclose(space);
+
+        return 0;
+    }
+    else
+    {
+        clearBar();
+        printw("Invalid command");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
+        getch();
+        clearBar();
+        move(0, 4);
+        return 1;
+    }
+
+    return 1;
 }
 
-char *inputPath(char *lastChar)
+char *inputPath(char *lastChar, char *input, int *loc)
 {
     char *file = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
-    char c = getchar();
+    char c = *(input + *loc);
+    (*loc)++;
     char end = (c == '"') ? '"' : ' ';
     if (end == '"')
     {
-        getchar();
+        (*loc)++;
     }
     for (int i = 0;; i++)
     {
-        c = getchar();
-        if (c == end || c == '\n')
+        c = *(input + *loc + i);
+        if (c == end || c == '\0')
         {
+            *loc += i + 1;
             *(file + i) = '\0';
             break;
         }
@@ -1083,7 +2244,8 @@ char *inputPath(char *lastChar)
     }
     if (end == '"')
     {
-        c = getchar();
+        c = *(input + *loc);
+        (*loc)++;
     }
     if (lastChar != NULL)
     {
@@ -1290,7 +2452,10 @@ int insert(char *address, char *string, int line, int pos)
     }
     fclose(file);
 
-    backupFile(address);
+    if (strcmp(address, ".unsaved.txt") != 0 && strcmp(address, ".backup.txt") != 0)
+    {
+        backupFile(address);
+    }
     FILE *new = fopen(address, "w");
     fprintf(file, "%s", content);
     fclose(new);
@@ -1310,20 +2475,91 @@ int cat(char *address, FILE *where)
     }
 
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
+    char c = '\n';
+    int line = 1, nChar = 0;
+    if (where == stdout)
+    {
+        clearScreen();
+        for (int i = 0; i < 100; i++)
+        {
+            map[i] = -1;
+        }
+        move(0, 0);
+    }
     for (int i = 0;; i++)
     {
-        char c = fgetc(file);
-        if (c == EOF)
+        if (c == '\n' && where == stdout && line > preLine && line - preLine <= LINES - 2)
         {
+            initLine(line);
+        }
+        c = fgetc(file);
+        nChar++;
+
+        if (where == stdout && line > preLine && line - preLine <= LINES - 2)
+        {
+            attron(COLOR_PAIR(BG_COLOR));
+            addch(c);
+            attroff(COLOR_PAIR(BG_COLOR));
+        }
+
+        if (c == '\n' && where == stdout)
+        {
+            map[line - 1] = nChar;
+            line++;
+            nChar = 0;
+        }
+        else if (c == EOF)
+        {
+            if (where == stdout)
+            {
+                if (line > preLine && line - preLine <= LINES - 2)
+                {
+                    attron(COLOR_PAIR(BG_COLOR));
+                    mvaddch(line - preLine - 1, 4, ' ');
+                    attroff(COLOR_PAIR(BG_COLOR));
+                }
+                map[line - 1] = 1;
+            }
             *(content + i) = '\0';
             break;
         }
-
         *(content + i) = c;
     }
     fclose(file);
-    fprintf(where, "%s", content);
+
+    if (where == stdout)
+    {
+        FILE *unsaved = fopen(".unsaved.txt", "w");
+        fclose(unsaved);
+        insert(".unsaved.txt", content, 1, 0);
+        if (strcmp(address, ".unsaved.txt") != 0 && strcmp(address, ".space.txt") != 0)
+        {
+            char *backup = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+            strcat(backup, filePath(address));
+            strcat(backup, ".");
+            strcat(backup, fileName(address));
+            FILE *fakeBackup = fopen(".backup.txt", "w");
+            cat(backup, fakeBackup);
+            fclose(fakeBackup);
+        }
+    }
+    else
+    {
+        fprintf(where, "%s", content);
+    }
     return 0;
+}
+
+void open(char *address)
+{
+    if (openStatus == 1 && saved == 0)
+    {
+        save();
+    }
+
+    currentFileName = address;
+    newFile(address);
+    cat(address, stdout);
 }
 
 int removeString(char *address, int line, int pos, int length, char direction)
@@ -1405,7 +2641,7 @@ int copy(char *address, int line, int pos, int length, char direction)
     }
 
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-    char *target = (char *)calloc(length, sizeof(char));
+    char *target = (char *)calloc(length + 1, sizeof(char));
     int curLine = 1, curPos = 0, start = 0;
     for (int i = 0;; i++)
     {
@@ -1446,7 +2682,7 @@ int copy(char *address, int line, int pos, int length, char direction)
         *(target + i) = *(content + i + start);
     }
 
-    FILE *clipboard = fopen("root/.clipboard.txt", "w");
+    FILE *clipboard = fopen(".clipboard.txt", "w");
     fprintf(clipboard, "%s", target);
     fclose(clipboard);
     return 0;
@@ -1477,7 +2713,7 @@ int cut(char *address, int line, int pos, int length, char direction)
 
 int paste(char *address, int line, int pos)
 {
-    FILE *clipboard = fopen("root/.clipboard.txt", "r");
+    FILE *clipboard = fopen(".clipboard.txt", "r");
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     for (int i = 0;; i++)
     {
@@ -1679,7 +2915,7 @@ int find(char *address, char *key, int options, int at, FILE *where)
     case 6:
         if (startA[at][0] == -1)
         {
-            printf("Not found!\n");
+            return 4;
         }
         else
         {
@@ -1690,7 +2926,7 @@ int find(char *address, char *key, int options, int at, FILE *where)
     case 3:
         if (startA[0][0] == -1)
         {
-            printf("Not found!\n");
+            return 4;
         }
         else
         {
@@ -1701,7 +2937,7 @@ int find(char *address, char *key, int options, int at, FILE *where)
         }
         break;
     case 8:
-    case ATTR_MAX_CHAR:
+    case 10:
         int count = 0;
         for (int i = 0; startA[i][0] != -1; i++)
         {
@@ -1728,7 +2964,7 @@ void printFind(int startA[][2], int i, int by, FILE *where)
     fprintf(where, "match %2d (%s): %3d\n", i + 1, byStr, startA[i][by]);
 }
 
-int replace(char *address, char *key, char *alternate, int options, int at)
+int replace(char *address, char *key, char *alternate, int options, int at, int interval[][2])
 {
     if (options == 3)
     {
@@ -1745,13 +2981,7 @@ int replace(char *address, char *key, char *alternate, int options, int at)
         return 2;
     }
 
-    int interval[INPUT_MAX_CHAR][2];
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
-    for (int i = 0; i < INPUT_MAX_CHAR; i++)
-    {
-        interval[i][0] = -1;
-        interval[i][1] = -1;
-    }
     int j = 0, start = -1, last = -1, n = 0, line = 1, pos = 0;
     int star = 0, endStar = 0, firstStar = 0, realStar = 0;
     for (int i = 0;; i++)
@@ -1882,6 +3112,10 @@ int replace(char *address, char *key, char *alternate, int options, int at)
         }
     }
     fclose(file);
+    if (options == 4)
+    {
+        return 5;
+    }
 
     at--;
     char *newContent = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
@@ -2082,6 +3316,11 @@ int grep(char *addresses[], int n, char *key, int options, FILE *where)
 
 void backupFile(char *address)
 {
+    if (strcmp(address, ".backup.txt") == 0)
+    {
+        return;
+    }
+
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
     FILE *file = fopen(address, "r");
     for (int i = 0;; i++)
@@ -2096,9 +3335,17 @@ void backupFile(char *address)
     }
     fclose(file);
 
-    char *backupAddress = filePath(address);
-    strcat(backupAddress, ".");
-    strcat(backupAddress, fileName(address));
+    char *backupAddress = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+    if (strcmp(address, ".unsaved.txt") == 0)
+    {
+        strcat(backupAddress, ".backup.txt");
+    }
+    else
+    {
+        strcat(backupAddress, filePath(address));
+        strcat(backupAddress, ".");
+        strcat(backupAddress, fileName(address));
+    }
     FILE *backup = fopen(backupAddress, "w");
     fprintf(backup, "%s", content);
     fclose(backup);
@@ -2117,9 +3364,17 @@ int undo(char *address)
     }
     fclose(file);
 
-    char *backupAddress = filePath(address);
-    strcat(backupAddress, ".");
-    strcat(backupAddress, fileName(address));
+    char *backupAddress = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+    if (strcmp(address, ".unsaved.txt") == 0)
+    {
+        strcat(backupAddress, ".backup.txt");
+    }
+    else
+    {
+        strcat(backupAddress, filePath(address));
+        strcat(backupAddress, ".");
+        strcat(backupAddress, fileName(address));
+    }
     FILE *backup = fopen(backupAddress, "r");
     if (backup == NULL)
     {
@@ -2636,7 +3891,7 @@ void indentTree(int depth, int history[], FILE *where)
 
 char *readPipe()
 {
-    FILE *pipe = fopen("root/.pipe.txt", "r");
+    FILE *pipe = fopen(".pipe.txt", "r");
     char *content = (char *)calloc(FILE_MAX_CHAR, sizeof(char));
 
     for (int i = 0;; i++)
@@ -2651,4 +3906,331 @@ char *readPipe()
     }
     fclose(pipe);
     return content;
+}
+
+void initWindow(WINDOW *bar)
+{
+    // initialize boxes
+    WINDOW *lineNo = newwin(LINES - 2, 4, 0, 0);
+    init_pair(LINE_NO_COLOR, COLOR_BLACK, 26);
+    wbkgd(lineNo, COLOR_PAIR(LINE_NO_COLOR));
+    WINDOW *mode = newwin(1, 10, LINES - 2, 0);
+    init_pair(MODE_NORMAL_COLOR, 15, COLOR_GREEN);
+    init_pair(MODE_VISUAL_COLOR, 15, COLOR_RED);
+    init_pair(MODE_INSERT_COLOR, 15, COLOR_MAGENTA);
+    wbkgd(mode, COLOR_PAIR(MODE_NORMAL_COLOR));
+    WINDOW *fileName = newwin(1, COLS - 10, LINES - 2, 10);
+    init_pair(FILE_NAME_COLOR, COLOR_BLACK, 15);
+    wbkgd(fileName, COLOR_PAIR(FILE_NAME_COLOR));
+    WINDOW *commandBar = newwin(1, COLS, LINES - 1, 0);
+    init_pair(ENTER_COLOR, 33, 16);
+    init_pair(BAR_COLOR, COLOR_WHITE, 16);
+    wbkgd(commandBar, COLOR_PAIR(BAR_COLOR));
+    bar = commandBar;
+
+    // box texts
+    changeMode("NORMAL");
+    move(0, 4);
+
+    init_pair(HIGHLIGHT_VISUAL_COLOR, 15, 12);
+    init_pair(HIGHLIGHT_FIND_COLOR, 15, 201);
+
+    wrefresh(lineNo);
+    wrefresh(mode);
+    wrefresh(fileName);
+    wrefresh(commandBar);
+    return;
+}
+
+char scan(char *text, char *input, int *loc)
+{
+    char c;
+    for (int i = 0;; i++)
+    {
+        c = *(input + *loc + i);
+        if (c == ' ' || c == '\0')
+        {
+            *loc += i + 1;
+            *(text + i) = '\0';
+            break;
+        }
+
+        *(text + i) = c;
+    }
+
+    return c;
+}
+
+int scanNumber(char *last, char *input, int *loc)
+{
+    int num = 0, sign = 1;
+    char c = *(input + *loc);
+    if (c == '-')
+    {
+        sign = -1;
+        (*loc)++;
+    }
+    for (int i = 0;; i++)
+    {
+        c = *(input + *loc + i);
+        if (c == ' ' || c == ':' || c == '\0')
+        {
+            *loc += i + 1;
+            if (last != NULL)
+            {
+                *last = c;
+            }
+            break;
+        }
+        num *= 10;
+        num += (c - '0');
+    }
+
+    return sign * num;
+}
+
+void clearBar()
+{
+    attron(COLOR_PAIR(BAR_COLOR));
+    for (int i = 0; i < COLS; i++)
+    {
+        mvaddch(LINES - 1, i, ' ');
+    }
+    attron(COLOR_PAIR(BAR_COLOR));
+    move(LINES - 1, 0);
+    return;
+}
+
+void clearName()
+{
+    attron(COLOR_PAIR(FILE_NAME_COLOR));
+    for (int i = 10; i < COLS; i++)
+    {
+        mvaddch(LINES - 2, i, ' ');
+    }
+    attron(COLOR_PAIR(FILE_NAME_COLOR));
+    return;
+}
+
+void clearLine(int line)
+{
+    attron(COLOR_PAIR(LINE_NO_COLOR));
+    for (int i = 0; i < 4; i++)
+    {
+        mvaddch(line, i, ' ');
+    }
+    attroff(COLOR_PAIR(LINE_NO_COLOR));
+    attron(COLOR_PAIR(BG_COLOR));
+    for (int i = 4; i < COLS; i++)
+    {
+        mvaddch(line, i, ' ');
+    }
+    attroff(COLOR_PAIR(BG_COLOR));
+    move(0, 4);
+    return;
+}
+
+void clearScreen()
+{
+    for (int i = 0; i < LINES - 2; i++)
+    {
+        clearLine(i);
+    }
+    return;
+}
+
+void initLine(int no)
+{
+    attron(COLOR_PAIR(LINE_NO_COLOR));
+    printw("%3d ", no);
+    attroff(COLOR_PAIR(LINE_NO_COLOR));
+}
+
+void highlight(int x1, int y1, int x2, int y2, int color)
+{
+    selectLength = 0;
+    int x, y, xx, yy;
+    if (y2 < y1 || (y1 == y2 && x2 < x1))
+    {
+        x = x2;
+        y = y2;
+        xx = x1;
+        yy = y1;
+    }
+    else
+    {
+        x = x1;
+        y = y1;
+        xx = x2;
+        yy = y2;
+    }
+
+    attron(COLOR_PAIR(color));
+    char c;
+    int j = y, i = x, thisLine = 0;
+    for (;; j++)
+    {
+        if (j == yy)
+        {
+            thisLine = 1;
+        }
+        for (;; i++)
+        {
+            if (i == map[j + preLine] + 4)
+            {
+                i = 4;
+                break;
+            }
+            if (thisLine == 1 && i == xx)
+            {
+                break;
+            }
+
+            c = mvinch(j, i);
+            mvaddch(j, i, c);
+            selectLength++;
+        }
+        if (thisLine == 1)
+        {
+            break;
+        }
+    }
+
+    move(y2, x2);
+    attroff(COLOR_PAIR(color));
+}
+
+void clearHighlight()
+{
+    char c;
+    attron(COLOR_PAIR(BG_COLOR));
+    for (int i = 0; i < LINES - 2; i++)
+    {
+        for (int j = 4; j < COLS; j++)
+        {
+            c = mvinch(i, j);
+            mvaddch(i, j, c);
+        }
+    }
+    attron(COLOR_PAIR(BG_COLOR));
+}
+
+void changeMode(char *mode)
+{
+    if (strcmp(mode, "NORMAL") == 0)
+    {
+        attron(COLOR_PAIR(MODE_NORMAL_COLOR));
+    }
+    else if (strcmp(mode, "VISUAL") == 0)
+    {
+        attron(COLOR_PAIR(MODE_VISUAL_COLOR));
+    }
+    else if (strcmp(mode, "INSERT") == 0)
+    {
+        attron(COLOR_PAIR(MODE_INSERT_COLOR));
+    }
+    attron(A_BOLD);
+
+    mvprintw(LINES - 2, 0, "  %s  ", mode);
+
+    if (strcmp(mode, "NORMAL") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_NORMAL_COLOR));
+    }
+    else if (strcmp(mode, "VISUAL") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_VISUAL_COLOR));
+    }
+    else if (strcmp(mode, "INSERT") == 0)
+    {
+        attroff(COLOR_PAIR(MODE_INSERT_COLOR));
+    }
+    attroff(A_BOLD);
+}
+
+void save()
+{
+    if (*currentFileName == '\0')
+    {
+        int n = 0;
+        int *loc = &n;
+        char *input = (char *)calloc(INPUT_MAX_CHAR, sizeof(char));
+        clearBar();
+        attron(COLOR_PAIR(BAR_COLOR));
+        mvprintw(LINES - 1, 0, "Enter a path for your file");
+        int x, y;
+        getyx(stdscr, y, x);
+        pressEnter(y, x);
+        getch();
+        clearBar();
+        attroff(COLOR_PAIR(BAR_COLOR));
+        move(LINES - 2, 12);
+        attron(COLOR_PAIR(FILE_NAME_COLOR));
+        getstr(input);
+        attroff(COLOR_PAIR(FILE_NAME_COLOR));
+        currentFileName = inputPath(NULL, input, loc);
+    }
+
+    newFile(currentFileName);
+    backupFile(currentFileName);
+    FILE *file = fopen(currentFileName, "w");
+    cat(".unsaved.txt", file);
+    fclose(file);
+    saved = 1;
+    showFileStatus();
+}
+
+void saveAs(char *address)
+{
+    if (strcmp(address, currentFileName) == 0)
+    {
+        backupFile(address);
+    }
+    newFile(address);
+    FILE *file = fopen(address, "w");
+    cat(".unsaved.txt", file);
+    fclose(file);
+    saved = 1;
+    open(address);
+    showFileStatus();
+}
+
+void showFileStatus()
+{
+    clearName();
+    attron(COLOR_PAIR(FILE_NAME_COLOR) | A_BOLD);
+    mvprintw(LINES - 2, 12, "%s", fileName(currentFileName));
+    attroff(A_BOLD);
+    if (saved == 1)
+    {
+        mvprintw(LINES - 2, COLS - 7, "SAVED");
+    }
+    attroff(COLOR_PAIR(FILE_NAME_COLOR));
+    move(0, 4);
+}
+
+void locToLineAndPos(int loc, int *y, int *x)
+{
+    int sum = 0;
+    int last = 0;
+    for (int i = 0;; i++)
+    {
+        sum += map[i];
+        if (loc < sum)
+        {
+            *y = i - preLine;
+            *x = loc - last + 4;
+            break;
+        }
+        last += map[i];
+    }
+    return;
+}
+
+void pressEnter(int y, int x)
+{
+    attron(COLOR_PAIR(ENTER_COLOR));
+    mvprintw(LINES - 1, COLS - 13, "Press ENTER");
+    attroff(COLOR_PAIR(ENTER_COLOR));
+    move(y, x);
 }
